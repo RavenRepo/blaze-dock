@@ -9,6 +9,7 @@ mod style;
 mod running_indicator;
 mod magnification;
 mod settings_dialog;
+mod badge;
 
 pub use window::DockWindow;
 pub use dock_item::DockItem;
@@ -16,4 +17,5 @@ pub use style::load_global_styles;
 pub use running_indicator::{RunningIndicator, RunningState};
 pub use magnification::MagnificationController;
 pub use settings_dialog::SettingsDialog;
+pub use badge::{Badge, BadgeType, BadgePosition};
 

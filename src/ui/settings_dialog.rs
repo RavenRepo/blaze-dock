@@ -23,13 +23,14 @@ pub struct SettingsDialog {
 
 impl SettingsDialog {
     /// Create a new settings dialog
-    pub fn new(parent: &Window, settings: Settings) -> Self {
+    pub fn new(parent: &impl IsA<Window>, settings: Settings) -> Self {
         let dialog = Dialog::builder()
             .title("BlazeDock Settings")
-            .transient_for(parent)
             .modal(true)
             .resizable(false)
             .build();
+        
+        dialog.set_transient_for(Some(parent));
 
         // Create content area
         let content = dialog.content_area();

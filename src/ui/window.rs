@@ -149,6 +149,21 @@ impl DockWindow {
         self.window.present();
     }
 
+    /// Show settings dialog
+    pub fn show_settings(&self, settings: &Settings) {
+        use crate::ui::SettingsDialog;
+        let dialog = SettingsDialog::new(&self.window, settings.clone());
+        if let Some(new_settings) = dialog.run() {
+            // Save new settings
+            if let Err(e) = new_settings.save() {
+                log::error!("Failed to save settings: {}", e);
+            } else {
+                log::info!("Settings saved successfully");
+                // TODO: Reload dock with new settings
+            }
+        }
+    }
+
     /// Start periodic updates for running indicators
     pub fn start_running_updates(&self) {
         use gtk::glib;

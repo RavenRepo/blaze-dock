@@ -78,5 +78,8 @@ fn on_activate(app: &Application, config: Rc<RefCell<Settings>>) {
     window.present();
     
     info!("Dock window created and presented");
+    
+    // Start periodic updates for running indicators
+    window.start_running_updates();
 }
 

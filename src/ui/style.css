@@ -10,7 +10,14 @@
     background-color: transparent;
 }
 
-/* ===== Dock Container ===== */
+/* ===== Dock Wrapper (outer container) ===== */
+.dock-wrapper {
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+}
+
+/* ===== Dock Container (styled inner box) ===== */
 .dock-container {
     /* Glassmorphism background */
     background-color: rgba(18, 18, 24, 0.88);
@@ -78,6 +85,59 @@
 .dock-item-hover {
     /* Scale up on hover - handled via CSS transform */
     transform: scale(1.15);
+    transition: transform 200ms cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Magnification via CSS custom property */
+.dock-item {
+    transition: transform 200ms cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* ===== Running Indicator ===== */
+.running-indicator {
+    margin-top: 4px;
+    min-height: 8px;
+}
+
+.running-indicator.stopped {
+    opacity: 0;
+}
+
+.running-indicator.running {
+    opacity: 1;
+}
+
+.running-indicator.focused {
+    opacity: 1;
+}
+
+.indicator-dot {
+    background-color: rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    min-width: 6px;
+    min-height: 6px;
+    margin: 0 2px;
+}
+
+.indicator-dot.focused-dot {
+    background-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+}
+
+.window-count-badge {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: bold;
+    margin-left: 2px;
+}
+
+.window-count-badge.focused {
+    color: rgba(255, 255, 255, 1.0);
+}
+
+/* ===== Dock Item Content Container ===== */
+.dock-item-content {
+    padding: 4px;
 }
 
 /* ===== Scrollbar Styling ===== */

@@ -5,6 +5,7 @@
 
 mod app;
 mod config;
+mod services;
 mod ui;
 mod utils;
 

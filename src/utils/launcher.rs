@@ -1,14 +1,13 @@
 //! Application launcher utility
 //!
-//! Provides async, non-blocking application launching to ensure
+//! Provides non-blocking application launching to ensure
 //! the dock UI never freezes when starting applications.
 
 use anyhow::{Context, Result};
-use log::{debug, info};
-use std::process::Stdio;
-use tokio::process::Command;
+use log::{debug, info, error};
+use std::process::{Command, Stdio};
 
-/// Launch an application command asynchronously
+/// Launch an application command
 ///
 /// This function spawns the command in a detached process so:
 /// 1. The dock doesn't wait for the application to exit
@@ -21,7 +20,7 @@ use tokio::process::Command;
 /// # Returns
 /// * `Ok(())` if the command was successfully spawned
 /// * `Err` if the command failed to start
-pub async fn launch_command(command: &str) -> Result<()> {
+pub fn launch_command(command: &str) -> Result<()> {
     debug!("Launching command: {}", command);
 
     // Parse the command into program and arguments
@@ -35,24 +34,27 @@ pub async fn launch_command(command: &str) -> Result<()> {
     let args = &parts[1..];
 
     // Spawn the process detached from the dock
-    let result = Command::new(program)
+    match Command::new(program)
         .args(args)
         // Don't inherit stdin/stdout/stderr - fully detach
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        // Create a new process group so killing the dock doesn't kill apps
-        .process_group(0)
         .spawn()
-        .context(format!("Failed to spawn command: {}", command))?;
-
-    info!(
-        "Successfully launched '{}' (PID: {:?})",
-        program,
-        result.id()
-    );
-
-    Ok(())
+    {
+        Ok(child) => {
+            info!(
+                "Successfully launched '{}' (PID: {})",
+                program,
+                child.id()
+            );
+            Ok(())
+        }
+        Err(e) => {
+            error!("Failed to launch '{}': {}", program, e);
+            Err(anyhow::anyhow!("Failed to spawn command '{}': {}", command, e))
+        }
+    }
 }
 
 /// Launch an application from its .desktop file
@@ -62,7 +64,7 @@ pub async fn launch_command(command: &str) -> Result<()> {
 ///
 /// # Arguments
 /// * `desktop_file_path` - Path to the .desktop file
-pub async fn launch_desktop_file(desktop_file_path: &str) -> Result<()> {
+pub fn launch_desktop_file(desktop_file_path: &str) -> Result<()> {
     use crate::utils::desktop_entry::DesktopEntry;
 
     debug!("Launching from desktop file: {}", desktop_file_path);
@@ -74,7 +76,7 @@ pub async fn launch_desktop_file(desktop_file_path: &str) -> Result<()> {
     let exec = entry.exec_command()
         .context("Desktop file has no Exec field")?;
 
-    launch_command(&exec).await
+    launch_command(&exec)
 }
 
 /// Check if a command exists in PATH

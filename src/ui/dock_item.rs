@@ -5,26 +5,28 @@
 use gtk::prelude::*;
 use gtk::{Button, Image, GestureClick};
 use gtk::gdk::Rectangle;
-use gtk::glib;
 use log::{debug, error, info};
 
 use crate::config::{PinnedApp, Settings};
 use crate::utils::launcher;
+use crate::ui::{RunningIndicator, RunningState};
 
 /// A single dock item (application launcher)
 pub struct DockItem {
     button: Button,
+    indicator: RunningIndicator,
 }
 
 impl DockItem {
     /// Create a new dock item for a pinned application
     pub fn new(app: &PinnedApp, settings: &Settings) -> Self {
-        let button = Self::create_button(app, settings);
+        let indicator = RunningIndicator::new();
+        let button = Self::create_button(app, settings, &indicator);
         Self::setup_click_handler(&button, app);
         Self::setup_hover_effects(&button, settings);
         Self::setup_context_menu(&button, app);
         
-        Self { button }
+        Self { button, indicator }
     }
 
     /// Get the underlying widget
@@ -32,11 +34,25 @@ impl DockItem {
         &self.button
     }
 
-    /// Create the button widget with icon
-    fn create_button(app: &PinnedApp, settings: &Settings) -> Button {
-        let button = Button::builder()
-            .css_classes(vec!["dock-item"])
-            .tooltip_text(&app.name)
+    /// Get the running indicator
+    pub fn indicator(&mut self) -> &mut RunningIndicator {
+        &mut self.indicator
+    }
+
+    /// Update running state
+    pub fn set_running_state(&mut self, state: RunningState) {
+        self.indicator.set_state(state);
+    }
+
+    /// Create the button widget with icon and indicator
+    fn create_button(app: &PinnedApp, settings: &Settings, indicator: &RunningIndicator) -> Button {
+        // Container for icon and indicator
+        let item_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(4)
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
+            .css_classes(vec!["dock-item-content"])
             .build();
 
         // Create icon from theme or path
@@ -44,7 +60,16 @@ impl DockItem {
         image.set_pixel_size(settings.icon_size as i32);
         image.add_css_class("dock-item-icon");
         
-        button.set_child(Some(&image));
+        item_box.append(&image);
+        
+        // Add running indicator below icon
+        item_box.append(indicator.widget());
+
+        let button = Button::builder()
+            .css_classes(vec!["dock-item"])
+            .tooltip_text(&app.name)
+            .child(&item_box)
+            .build();
 
         button
     }
@@ -57,13 +82,10 @@ impl DockItem {
         button.connect_clicked(move |_| {
             info!("Launching application: {}", name);
             
-            // Launch asynchronously to prevent UI freeze
-            let cmd = command.clone();
-            glib::spawn_future_local(async move {
-                if let Err(e) = launcher::launch_command(&cmd).await {
-                    error!("Failed to launch '{}': {}", cmd, e);
-                }
-            });
+            // Launch the application (spawns process and returns immediately)
+            if let Err(e) = launcher::launch_command(&command) {
+                error!("Failed to launch '{}': {}", command, e);
+            }
         });
     }
 
@@ -119,6 +141,11 @@ impl DockItem {
         });
 
         button.add_controller(gesture);
+    }
+
+    /// Setup middle-click to show settings (temporary - will be moved to window)
+    pub fn setup_settings_shortcut(_button: &Button) {
+        // TODO: Implement settings dialog trigger
     }
 
     /// Create the context menu popover

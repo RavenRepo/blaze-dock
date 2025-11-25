@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="flame" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#FF4500"/>
+      <stop offset="50%" style="stop-color:#FF6B35"/>
+      <stop offset="100%" style="stop-color:#FFD700"/>
+    </linearGradient>
+    <linearGradient id="innerFlame" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#FFA500"/>
+      <stop offset="100%" style="stop-color:#FFFACD"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="64" height="64" rx="12" fill="#1A202C"/>
+  
+  <!-- Dock bar -->
+  <rect x="8" y="14" width="8" height="36" rx="4" fill="#4A5568" opacity="0.5"/>
+  <circle cx="12" cy="22" r="2.5" fill="#718096"/>
+  <circle cx="12" cy="32" r="2.5" fill="#718096"/>
+  <circle cx="12" cy="42" r="2.5" fill="#FF6B35"/>
+  
+  <!-- Flame -->
+  <path d="M 38 10 C 38 10, 54 25, 52 38 C 50 48, 44 54, 38 56 C 32 54, 26 48, 24 38 C 22 25, 38 10, 38 10 Z" 
+        fill="url(#flame)"/>
+  <path d="M 38 22 C 38 22, 48 32, 46 40 C 45 46, 41 50, 38 51 C 35 50, 31 46, 30 40 C 29 32, 38 22, 38 22 Z" 
+        fill="url(#innerFlame)"/>
+  <path d="M 38 32 C 38 32, 43 38, 42 43 C 41 46, 39 48, 38 48 C 37 48, 35 46, 34 43 C 33 38, 38 32, 38 32 Z" 
+        fill="#FFFEF0" opacity="0.9"/>
+</svg>
+

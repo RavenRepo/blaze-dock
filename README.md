@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/logo.png" alt="BlazeDock Logo" width="128" height="128">
+  <img src="docs/logo.png" alt="BlazeDock Logo" width="180" height="180">
 </p>
 
-<h1 align="center">BlazeDock</h1>
+<h1 align="center">🔥 BlazeDock</h1>
 
 <p align="center">
   <strong>A professional, lag-free Wayland dock for Linux</strong>

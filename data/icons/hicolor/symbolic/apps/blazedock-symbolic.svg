@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- Symbolic icon for system tray / monochrome contexts -->
+  <style>
+    path { fill: #bebebe; }
+  </style>
+  
+  <!-- Dock bar -->
+  <rect x="1" y="3" width="3" height="10" rx="1"/>
+  
+  <!-- Flame -->
+  <path d="M 10 2 C 10 2, 14 5, 13.5 8 C 13 10.5, 11.5 12, 10 12.5 C 8.5 12, 7 10.5, 6.5 8 C 6 5, 10 2, 10 2 Z"/>
+</svg>
+

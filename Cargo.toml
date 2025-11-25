@@ -1,0 +1,112 @@
+[package]
+name = "blazedock"
+version = "0.1.0"
+edition = "2021"
+authors = ["BlazeDock Contributors"]
+description = "A professional, lag-free Wayland dock for Fedora 43"
+license = "MIT"
+repository = "https://github.com/blazedock/blazedock-fedora"
+keywords = ["dock", "wayland", "fedora", "gtk4", "panel"]
+categories = ["gui", "desktop"]
+
+[dependencies]
+# GTK4 for modern, hardware-accelerated UI
+gtk = { version = "0.9", package = "gtk4" }
+
+# Layer Shell support for Wayland panel behavior
+gtk4-layer-shell = "0.4"
+
+# Serialization for config files
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+
+# Cross-platform config/data directories
+directories = "5.0"
+
+# Async runtime for non-blocking operations
+tokio = { version = "1.0", features = ["rt", "process", "macros"] }
+
+# Logging infrastructure
+log = "0.4"
+env_logger = "0.11"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Desktop file parsing
+freedesktop_entry_parser = "1.3"
+
+# File watching for config changes
+notify = "6.1"
+
+# Command existence checking
+which = "6.0"
+
+# Home directory resolution
+dirs = "5.0"
+
+# ============================================
+# Phase 2+: Advanced Features (Optional)
+# ============================================
+
+# D-Bus integration for system services
+zbus = { version = "4.0", optional = true }
+
+# Wayland protocols for window tracking
+wayland-client = { version = "0.31", optional = true }
+wayland-protocols-wlr = { version = "0.3", optional = true }
+
+# Process monitoring for app health
+procfs = { version = "0.16", optional = true }
+
+# Usage statistics database
+rusqlite = { version = "0.31", features = ["bundled"], optional = true }
+
+# Color manipulation for theming
+palette = { version = "0.7", optional = true }
+
+# Cairo for custom drawing (badges, progress rings)
+cairo-rs = { version = "0.20", features = ["v1_16"], optional = true }
+
+[profile.release]
+# Link Time Optimization for maximum performance
+lto = true
+# Single codegen unit for better optimization
+codegen-units = 1
+# Strip debug symbols to reduce binary size
+strip = true
+# Maximum optimization level
+opt-level = 3
+# Enable panic abort for smaller binary
+panic = "abort"
+
+[profile.dev]
+# Faster builds in development
+opt-level = 0
+debug = true
+
+[features]
+default = []
+
+# Enable debug overlay for development
+debug-overlay = []
+
+# Phase 2: D-Bus API and notifications
+dbus = ["zbus"]
+
+# Phase 3: Window tracking and previews  
+window-tracking = ["wayland-client", "wayland-protocols-wlr"]
+
+# Phase 4: System integration
+system-integration = ["procfs", "dbus"]
+
+# Phase 5: Usage learning
+intelligence = ["rusqlite"]
+
+# Phase 6: Advanced theming
+advanced-theming = ["palette", "cairo-rs"]
+
+# All features enabled
+full = ["dbus", "window-tracking", "system-integration", "intelligence", "advanced-theming"]
+

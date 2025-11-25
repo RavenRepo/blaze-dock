@@ -1,0 +1,157 @@
+/*
+ * BlazeDock - Plesk-Style Glassmorphism Theme
+ * 
+ * A modern, dark, semi-transparent dock aesthetic
+ * inspired by Plesk control panel and macOS dock.
+ */
+
+/* ===== Main Window ===== */
+.blazedock-window {
+    background-color: transparent;
+}
+
+/* ===== Dock Container ===== */
+.dock-container {
+    /* Glassmorphism background */
+    background-color: rgba(18, 18, 24, 0.88);
+    
+    /* Subtle border for depth */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    
+    /* Rounded corners */
+    border-radius: 16px;
+    
+    /* Padding around icons */
+    padding: 12px;
+    
+    /* Subtle shadow for elevation */
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+
+/* ===== Individual Dock Items ===== */
+.dock-item {
+    /* Reset button styles */
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    
+    /* Spacing */
+    padding: 8px;
+    margin: 2px;
+    
+    /* Rounded corners on hover */
+    border-radius: 12px;
+    
+    /* Smooth transitions */
+    transition: 
+        background-color 200ms ease-in-out,
+        transform 150ms ease-out;
+}
+
+.dock-item:hover,
+.dock-item-hover {
+    /* Subtle highlight on hover */
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.dock-item:active {
+    /* Accent color on click */
+    background-color: rgba(82, 113, 255, 0.35);
+}
+
+.dock-item:focus {
+    /* Subtle focus indicator */
+    outline: 2px solid rgba(82, 113, 255, 0.5);
+    outline-offset: 2px;
+}
+
+/* ===== Dock Item Icons ===== */
+.dock-item-icon {
+    /* Ensure icons render crisply */
+    -gtk-icon-style: symbolic;
+}
+
+/* ===== Hover Zoom Effect ===== */
+.dock-item-hover {
+    /* Scale up on hover - handled via CSS transform */
+    transform: scale(1.15);
+}
+
+/* ===== Scrollbar Styling ===== */
+scrollbar {
+    background-color: transparent;
+}
+
+scrollbar slider {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    min-width: 6px;
+    min-height: 6px;
+}
+
+scrollbar slider:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+/* ===== Context Menu ===== */
+popover {
+    background-color: rgba(30, 30, 38, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+popover arrow {
+    background-color: rgba(30, 30, 38, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.context-menu-item {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+}
+
+.context-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.context-menu-item:active {
+    background-color: rgba(82, 113, 255, 0.3);
+}
+
+/* ===== Tooltip Styling ===== */
+tooltip {
+    background-color: rgba(20, 20, 28, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* ===== Running App Indicator ===== */
+/* Note: GTK4 doesn't support ::after pseudo-elements, 
+   using CSS class instead for running indicators */
+.dock-item-running {
+    border-bottom: 3px solid rgba(255, 255, 255, 0.8);
+}
+
+/* ===== High Contrast Mode Support ===== */
+/* Note: Using GTK's built-in high-contrast support */
+.dock-container-high-contrast {
+    background-color: rgba(0, 0, 0, 0.95);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.dock-item-high-contrast:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+}
+

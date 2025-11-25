@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=BlazeDock
+Comment=Professional Wayland dock for Fedora
+Exec=/usr/local/bin/blazedock
+Icon=blazedock
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Desktop
+

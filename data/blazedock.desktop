@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=BlazeDock
+GenericName=Application Dock
+Comment=A professional Wayland dock for Fedora
+Exec=blazedock
+Icon=blazedock
+Categories=Utility;System;
+Keywords=dock;panel;launcher;taskbar;
+StartupNotify=false
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Desktop
+

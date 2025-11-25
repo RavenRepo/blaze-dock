@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    container: fedora:43
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          dnf install -y \
+            gcc \
+            gtk4-devel \
+            gtk4-layer-shell-devel \
+            pkg-config \
+            curl
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+      
+      - name: Run cargo check
+        run: cargo check --all-features
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    container: fedora:43
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          dnf install -y \
+            gcc \
+            gtk4-devel \
+            gtk4-layer-shell-devel \
+            pkg-config \
+            curl
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+      
+      - name: Run tests
+        run: cargo test --all-features
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-action@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    container: fedora:43
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          dnf install -y \
+            gcc \
+            gtk4-devel \
+            gtk4-layer-shell-devel \
+            pkg-config \
+            curl
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          components: clippy
+      
+      - name: Run clippy
+        run: cargo clippy --all-features -- -D warnings
+
+  build:
+    name: Build Release
+    runs-on: ubuntu-latest
+    container: fedora:43
+    needs: [check, test, fmt, clippy]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          dnf install -y \
+            gcc \
+            gtk4-devel \
+            gtk4-layer-shell-devel \
+            pkg-config \
+            curl
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+      
+      - name: Build release
+        run: cargo build --release
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blazedock-linux-x86_64
+          path: target/release/blazedock
+

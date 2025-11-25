@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build Release Binary
+    runs-on: ubuntu-latest
+    container: fedora:43
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          dnf install -y \
+            gcc \
+            gtk4-devel \
+            gtk4-layer-shell-devel \
+            pkg-config \
+            curl
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+      
+      - name: Build release
+        run: cargo build --release
+      
+      - name: Package binary
+        run: |
+          mkdir -p release
+          cp target/release/blazedock release/
+          cp README.md LICENSE release/
+          cp -r config release/
+          cp -r data release/
+          tar -czvf blazedock-${{ github.ref_name }}-linux-x86_64.tar.gz -C release .
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blazedock-${{ github.ref_name }}-linux-x86_64
+          path: blazedock-${{ github.ref_name }}-linux-x86_64.tar.gz
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: blazedock-${{ github.ref_name }}-linux-x86_64
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: blazedock-${{ github.ref_name }}-linux-x86_64.tar.gz
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+

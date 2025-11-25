@@ -1,0 +1,76 @@
+# BlazeDock Configuration
+# 
+# This is the default configuration file for BlazeDock.
+# Copy this to ~/.config/blazedock/blazedock.toml to customize.
+
+# Dock position: "left", "right", "top", or "bottom"
+position = "left"
+
+# Icon size in pixels
+icon_size = 48
+
+# Dock width/height (depending on orientation)
+dock_size = 72
+
+# Margin from screen edge in pixels
+margin = 8
+
+# Spacing between icons in pixels
+spacing = 8
+
+# Enable auto-hide behavior
+auto_hide = false
+
+# Auto-hide delay in milliseconds
+auto_hide_delay = 500
+
+# Background opacity (0.0 - 1.0)
+opacity = 0.85
+
+# Border radius for rounded corners
+border_radius = 16
+
+# Enable exclusive zone (push windows aside)
+exclusive_zone = true
+
+# Enable hover zoom effect
+hover_zoom = true
+
+# Hover zoom scale factor
+hover_zoom_scale = 1.15
+
+# Pinned applications
+[[pinned_apps]]
+name = "Firefox"
+icon = "firefox"
+command = "firefox"
+desktop_file = "/usr/share/applications/firefox.desktop"
+
+[[pinned_apps]]
+name = "Files"
+icon = "org.gnome.Nautilus"
+command = "nautilus"
+desktop_file = "/usr/share/applications/org.gnome.Nautilus.desktop"
+
+[[pinned_apps]]
+name = "Terminal"
+icon = "org.gnome.Terminal"
+command = "gnome-terminal"
+desktop_file = "/usr/share/applications/org.gnome.Terminal.desktop"
+
+[[pinned_apps]]
+name = "Settings"
+icon = "org.gnome.Settings"
+command = "gnome-control-center"
+desktop_file = "/usr/share/applications/org.gnome.Settings.desktop"
+
+[[pinned_apps]]
+name = "Code"
+icon = "visual-studio-code"
+command = "code"
+
+[[pinned_apps]]
+name = "Software"
+icon = "org.gnome.Software"
+command = "gnome-software"
+

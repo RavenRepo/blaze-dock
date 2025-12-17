@@ -81,5 +81,8 @@ fn on_activate(app: &Application, config: Rc<RefCell<Settings>>) {
     
     // Start periodic updates for running indicators
     window.start_running_updates();
+    
+    // Start periodic refresh of running apps (macOS-style)
+    window.start_running_apps_refresh();
 }
 

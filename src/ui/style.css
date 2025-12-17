@@ -298,6 +298,14 @@ tooltip {
     border-bottom: 3px solid rgba(255, 255, 255, 0.8);
 }
 
+/* ===== Dock Separator (between pinned and running apps) ===== */
+.dock-separator {
+    background-color: rgba(255, 255, 255, 0.2);
+    min-width: 2px;
+    min-height: 2px;
+    margin: 8px;
+}
+
 /* ===== High Contrast Mode Support ===== */
 .dock-container-high-contrast {
     background-color: rgba(0, 0, 0, 0.95);

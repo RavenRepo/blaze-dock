@@ -16,16 +16,19 @@ use std::rc::Rc;
 /// Main dock window wrapper
 pub struct DockWindow {
     window: ApplicationWindow,
+    dock_box: Rc<RefCell<Box>>,  // Inner dock container for dynamic updates
     dock_items: Rc<RefCell<Vec<(String, Rc<RefCell<DockItem>>, bool)>>>, // (command, item, is_pinned)
+    running_items: Rc<RefCell<Vec<(String, Rc<RefCell<DockItem>>)>>>, // Running (non-pinned) apps
     process_tracker: ProcessTracker,
     window_tracker: WindowTracker,
     drive_monitor: DriveMonitor,
     recent_files: RecentFilesService,
-    running_apps_service: RunningAppsService,
+    running_apps_service: Rc<RunningAppsService>,
     magnification: Rc<RefCell<MagnificationController>>,
     dbus_service: Option<DBusService>,
     is_hidden: Rc<RefCell<bool>>,
     settings: Rc<RefCell<Settings>>,
+    separator: Rc<RefCell<Option<Separator>>>,
 }
 
 impl DockWindow {
@@ -69,9 +72,12 @@ impl DockWindow {
 
         // Store dock items reference
         let dock_items = Rc::new(RefCell::new(Vec::new()));
+        let running_items = Rc::new(RefCell::new(Vec::new()));
+        let dock_box = Rc::new(RefCell::new(Box::new(Orientation::Horizontal, 0)));
+        let separator: Rc<RefCell<Option<Separator>>> = Rc::new(RefCell::new(None));
 
         // Initialize D-Bus service
-        let (dbus_service, mut dbus_rx) = DBusService::new();
+        let (dbus_service, dbus_rx) = DBusService::new();
         dbus_service.start();
 
         // Create magnification controller
@@ -79,7 +85,10 @@ impl DockWindow {
             settings.hover_zoom_scale,
             2,
         )));
-        let dock_content = Self::create_dock_content(settings, &dock_items, &magnification);
+        
+        // Create dock content and store dock_box reference
+        let (dock_content, inner_dock_box) = Self::create_dock_content(settings, &dock_items, &magnification);
+        *dock_box.borrow_mut() = inner_dock_box;
         
         // Set size based on position
         let (width, height) = match settings.position {
@@ -127,23 +136,26 @@ impl DockWindow {
         let magnification_stored = Rc::clone(&magnification);
         
         // Initialize running apps service
-        let running_apps_service = RunningAppsService::new();
+        let running_apps_service = Rc::new(RunningAppsService::new());
         
         // Store settings
         let settings_rc = Rc::new(RefCell::new(settings.clone()));
         
         let self_instance = Self {
             window: window.clone(),
+            dock_box: Rc::clone(&dock_box),
             dock_items: dock_items_stored,
+            running_items: Rc::clone(&running_items),
             process_tracker,
             window_tracker,
             drive_monitor,
             recent_files,
-            running_apps_service,
+            running_apps_service: Rc::clone(&running_apps_service),
             magnification: magnification_stored,
             dbus_service: Some(dbus_service),
             is_hidden: Rc::clone(&is_hidden),
-            settings: settings_rc,
+            settings: Rc::clone(&settings_rc),
+            separator: Rc::clone(&separator),
         };
 
         // Setup auto-hide if enabled
@@ -283,11 +295,14 @@ impl DockWindow {
         // Remove old content
         self.window.set_child(None::<&gtk::Widget>);
         
-        // Clear dock items
+        // Clear dock items and running items
         self.dock_items.borrow_mut().clear();
+        self.running_items.borrow_mut().clear();
+        *self.separator.borrow_mut() = None;
         
         // Re-create content
-        let dock_content = Self::create_dock_content(settings, &self.dock_items, &self.magnification);
+        let (dock_content, inner_dock_box) = Self::create_dock_content(settings, &self.dock_items, &self.magnification);
+        *self.dock_box.borrow_mut() = inner_dock_box;
         self.window.set_child(Some(&dock_content));
         
         // Re-setup layer shell if needed
@@ -376,15 +391,17 @@ impl DockWindow {
     /// Start periodic updates for running indicators
     pub fn start_running_updates(&self) {
         let dock_items = Rc::clone(&self.dock_items);
+        let running_items = Rc::clone(&self.running_items);
         let process_tracker = self.process_tracker.clone();
         let window_tracker = self.window_tracker.clone();
         
+        // Update running indicators for pinned apps
         gtk::glib::timeout_add_seconds_local(2, move || {
+            // Update pinned apps running state
             let dock_items_guard = dock_items.borrow();
             for (command, item, _is_pinned) in dock_items_guard.iter() {
                 let is_running = process_tracker.is_running(command);
                 
-                // Get actual window count if possible
                 let app_id = command.split_whitespace().next().unwrap_or(command);
                 let window_count = window_tracker.get_window_count(app_id);
                 
@@ -397,18 +414,114 @@ impl DockWindow {
                 };
                 item.borrow_mut().set_running_state(state);
             }
+            
+            // Update running (non-pinned) apps - they're always running
+            let running_guard = running_items.borrow();
+            for (_, item) in running_guard.iter() {
+                item.borrow_mut().set_running_state(RunningState::Running { window_count: 1 });
+            }
+            
             gtk::glib::ControlFlow::Continue
         });
         
         info!("Running updates started");
     }
 
+    /// Start periodic refresh of running apps
+    pub fn start_running_apps_refresh(&self) {
+        let dock_box = Rc::clone(&self.dock_box);
+        let running_items = Rc::clone(&self.running_items);
+        let separator = Rc::clone(&self.separator);
+        let settings = Rc::clone(&self.settings);
+        let running_apps_service = Rc::clone(&self.running_apps_service);
+        
+        // Refresh running apps every 3 seconds
+        gtk::glib::timeout_add_seconds_local(3, move || {
+            let settings_guard = settings.borrow();
+            let pinned_commands: Vec<String> = settings_guard.pinned_apps.iter()
+                .map(|app| app.command.clone())
+                .collect();
+            
+            // Get currently running apps
+            let running_apps = running_apps_service.get_running_apps(&pinned_commands);
+            
+            let dock_box_ref = dock_box.borrow();
+            let mut running_items_mut = running_items.borrow_mut();
+            let mut separator_mut = separator.borrow_mut();
+            
+            // Get current running app commands
+            let current_running: std::collections::HashSet<String> = running_items_mut.iter()
+                .map(|(cmd, _)| cmd.clone())
+                .collect();
+            
+            // Get new running apps
+            let new_running: std::collections::HashSet<String> = running_apps.iter()
+                .map(|app| app.command.clone())
+                .collect();
+            
+            // Remove apps that are no longer running
+            running_items_mut.retain(|(cmd, item)| {
+                if !new_running.contains(cmd) {
+                    dock_box_ref.remove(item.borrow().widget());
+                    debug!("Removed running app from dock: {}", cmd);
+                    false
+                } else {
+                    true
+                }
+            });
+            
+            // Handle separator
+            let has_running = !running_apps.is_empty();
+            if !has_running {
+                if let Some(sep) = separator_mut.take() {
+                    dock_box_ref.remove(&sep);
+                }
+            } else if separator_mut.is_none() {
+                let orientation = match settings_guard.position {
+                    DockPosition::Left | DockPosition::Right => gtk::Orientation::Horizontal,
+                    DockPosition::Top | DockPosition::Bottom => gtk::Orientation::Vertical,
+                };
+                let sep = Separator::builder()
+                    .orientation(orientation)
+                    .margin_start(8)
+                    .margin_end(8)
+                    .css_classes(vec!["dock-separator"])
+                    .build();
+                dock_box_ref.append(&sep);
+                *separator_mut = Some(sep);
+            }
+            
+            // Add new running apps
+            for app in running_apps {
+                if !current_running.contains(&app.command) {
+                    let dock_item = Rc::new(RefCell::new(DockItem::new_running(
+                        &app.name,
+                        &app.icon,
+                        &app.command,
+                        app.desktop_file.as_deref(),
+                        &settings_guard,
+                    )));
+                    
+                    dock_box_ref.append(dock_item.borrow().widget());
+                    running_items_mut.push((app.command.clone(), Rc::clone(&dock_item)));
+                    
+                    info!("Added running app to dock: {} ({})", app.name, app.command);
+                }
+            }
+            
+            gtk::glib::ControlFlow::Continue
+        });
+        
+        info!("Running apps refresh started");
+    }
+
     /// Create the dock content container with app items
+    /// Returns (main_box, dock_box) so we can store dock_box for dynamic updates
     fn create_dock_content(
         settings: &Settings,
         dock_items: &Rc<RefCell<Vec<(String, Rc<RefCell<DockItem>>, bool)>>>,
         magnification: &Rc<RefCell<MagnificationController>>,
-    ) -> Box {
+    ) -> (Box, Box) {
         let orientation = match settings.position {
             DockPosition::Left | DockPosition::Right => Orientation::Vertical,
             DockPosition::Top | DockPosition::Bottom => Orientation::Horizontal,
@@ -477,7 +590,87 @@ impl DockWindow {
             orientation
         );
 
-        main_box
+        (main_box, dock_box)
+    }
+
+    /// Refresh running apps in the dock
+    pub fn refresh_running_apps(&self) {
+        let settings = self.settings.borrow();
+        let pinned_commands: Vec<String> = settings.pinned_apps.iter()
+            .map(|app| app.command.clone())
+            .collect();
+        
+        // Get currently running apps
+        let running_apps = self.running_apps_service.get_running_apps(&pinned_commands);
+        
+        let dock_box = self.dock_box.borrow();
+        let mut running_items = self.running_items.borrow_mut();
+        let mut separator = self.separator.borrow_mut();
+        
+        // Get list of currently displayed running app commands
+        let current_running: std::collections::HashSet<String> = running_items.iter()
+            .map(|(cmd, _)| cmd.clone())
+            .collect();
+        
+        // Get list of new running apps
+        let new_running: std::collections::HashSet<String> = running_apps.iter()
+            .map(|app| app.command.clone())
+            .collect();
+        
+        // Remove apps that are no longer running
+        running_items.retain(|(cmd, item)| {
+            if !new_running.contains(cmd) {
+                dock_box.remove(item.borrow().widget());
+                debug!("Removed running app from dock: {}", cmd);
+                false
+            } else {
+                true
+            }
+        });
+        
+        // Check if we need a separator
+        let has_running = !running_apps.is_empty();
+        let needs_separator = has_running && separator.is_none();
+        let remove_separator = !has_running && separator.is_some();
+        
+        if remove_separator {
+            if let Some(sep) = separator.take() {
+                dock_box.remove(&sep);
+            }
+        }
+        
+        if needs_separator {
+            let orientation = match settings.position {
+                DockPosition::Left | DockPosition::Right => gtk::Orientation::Horizontal,
+                DockPosition::Top | DockPosition::Bottom => gtk::Orientation::Vertical,
+            };
+            let sep = Separator::builder()
+                .orientation(orientation)
+                .margin_start(8)
+                .margin_end(8)
+                .css_classes(vec!["dock-separator"])
+                .build();
+            dock_box.append(&sep);
+            *separator = Some(sep);
+        }
+        
+        // Add new running apps
+        for app in running_apps {
+            if !current_running.contains(&app.command) {
+                let dock_item = Rc::new(RefCell::new(DockItem::new_running(
+                    &app.name,
+                    &app.icon,
+                    &app.command,
+                    app.desktop_file.as_deref(),
+                    &settings,
+                )));
+                
+                dock_box.append(dock_item.borrow().widget());
+                running_items.push((app.command.clone(), Rc::clone(&dock_item)));
+                
+                info!("Added running app to dock: {} ({})", app.name, app.command);
+            }
+        }
     }
 }
 

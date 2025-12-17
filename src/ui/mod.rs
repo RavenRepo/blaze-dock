@@ -11,6 +11,8 @@ mod magnification;
 mod settings_dialog;
 mod badge;
 mod window_preview;
+mod progress_ring;
+mod search_overlay;
 
 pub use window::DockWindow;
 pub use dock_item::DockItem;
@@ -20,4 +22,6 @@ pub use magnification::MagnificationController;
 pub use settings_dialog::SettingsDialog;
 pub use badge::{Badge, BadgeType, BadgePosition};
 pub use window_preview::WindowPreview;
+pub use progress_ring::ProgressRing;
+pub use search_overlay::{SearchOverlay, SearchResult};
 

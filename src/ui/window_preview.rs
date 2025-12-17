@@ -3,7 +3,7 @@
 //! Shows thumbnails of open windows when hovering over dock items.
 
 use gtk::prelude::*;
-use gtk::{Box, Label, Picture, Popover, Widget, Button};
+use gtk::{Box, Label, Picture, Popover, Widget};
 use log::debug;
 
 /// Window preview component

@@ -38,6 +38,17 @@ pub struct PinnedApp {
     pub desktop_file: Option<String>,
 }
 
+/// Multi-monitor mode
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum MultiMonitorMode {
+    #[default]
+    Primary,
+    All,
+    Follow,
+    PerMonitor,
+}
+
 /// Main settings structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -78,6 +89,24 @@ pub struct Settings {
     /// Hover zoom scale factor
     pub hover_zoom_scale: f64,
     
+    /// Multi-monitor mode
+    pub multi_monitor_mode: MultiMonitorMode,
+    
+    /// Enable keyboard shortcuts (Super+1-9)
+    pub enable_shortcuts: bool,
+    
+    /// Active profile name
+    pub active_profile: String,
+    
+    /// Enable dynamic running apps display
+    pub show_running_apps: bool,
+    
+    /// Enable window previews on hover
+    pub enable_window_previews: bool,
+    
+    /// Theme mode (light/dark/system)
+    pub theme_mode: String,
+    
     /// List of pinned applications
     pub pinned_apps: Vec<PinnedApp>,
 }
@@ -85,7 +114,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            position: DockPosition::Left,
+            position: DockPosition::Bottom,
             icon_size: 48,
             dock_size: 72,
             margin: 8,
@@ -94,9 +123,15 @@ impl Default for Settings {
             auto_hide_delay: 500,
             opacity: 0.85,
             border_radius: 16,
-            exclusive_zone: true,
+            exclusive_zone: false,
             hover_zoom: true,
             hover_zoom_scale: 1.15,
+            multi_monitor_mode: MultiMonitorMode::Primary,
+            enable_shortcuts: true,
+            active_profile: "default".to_string(),
+            show_running_apps: true,
+            enable_window_previews: true,
+            theme_mode: "system".to_string(),
             pinned_apps: Self::default_pinned_apps(),
         }
     }

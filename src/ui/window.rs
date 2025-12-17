@@ -8,8 +8,12 @@ use gtk4_layer_shell::{Edge, Layer, LayerShell};
 use log::{debug, info, warn};
 
 use crate::config::{DockPosition, Settings, PinnedApp};
-use crate::services::{ProcessTracker, DBusService, WindowTracker, DriveMonitor, RecentFilesService, RunningAppsService, RunningApp};
-use crate::ui::{DockItem, RunningState, MagnificationController};
+use crate::services::{
+    ProcessTracker, DBusService, WindowTracker, DriveMonitor, RecentFilesService, 
+    RunningAppsService, RunningApp, ThemeService, KeyboardService, ShortcutAction,
+    MultiMonitorService, ScreencopyService,
+};
+use crate::ui::{DockItem, RunningState, MagnificationController, SearchOverlay, SearchResult};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -29,6 +33,12 @@ pub struct DockWindow {
     is_hidden: Rc<RefCell<bool>>,
     settings: Rc<RefCell<Settings>>,
     separator: Rc<RefCell<Option<Separator>>>,
+    // New services
+    theme_service: ThemeService,
+    keyboard_service: KeyboardService,
+    multimonitor_service: MultiMonitorService,
+    screencopy_service: ScreencopyService,
+    focused_item_index: Rc<RefCell<Option<usize>>>,
 }
 
 impl DockWindow {
@@ -140,6 +150,19 @@ impl DockWindow {
         
         // Store settings
         let settings_rc = Rc::new(RefCell::new(settings.clone()));
+
+        // Initialize new services
+        let theme_service = ThemeService::new();
+        theme_service.start_monitoring();
+        
+        let keyboard_service = KeyboardService::new();
+        let multimonitor_service = MultiMonitorService::new();
+        multimonitor_service.start_monitoring();
+        
+        let screencopy_service = ScreencopyService::new();
+        screencopy_service.start();
+        
+        let focused_item_index = Rc::new(RefCell::new(None::<usize>));
         
         let self_instance = Self {
             window: window.clone(),
@@ -156,7 +179,17 @@ impl DockWindow {
             is_hidden: Rc::clone(&is_hidden),
             settings: Rc::clone(&settings_rc),
             separator: Rc::clone(&separator),
+            theme_service,
+            keyboard_service,
+            multimonitor_service,
+            screencopy_service,
+            focused_item_index: Rc::clone(&focused_item_index),
         };
+
+        // Setup keyboard shortcuts if enabled
+        if settings.enable_shortcuts {
+            self_instance.setup_keyboard_shortcuts();
+        }
 
         // Setup auto-hide if enabled
         if settings.auto_hide {
@@ -164,6 +197,87 @@ impl DockWindow {
         }
 
         self_instance
+    }
+
+    /// Setup keyboard shortcuts
+    fn setup_keyboard_shortcuts(&self) {
+        let dock_items = Rc::clone(&self.dock_items);
+        let focused_index = Rc::clone(&self.focused_item_index);
+        let window = self.window.clone();
+        let settings = Rc::clone(&self.settings);
+        
+        // Register shortcut handler
+        self.keyboard_service.on_action("main", move |action| {
+            match action {
+                ShortcutAction::ActivateApp(num) => {
+                    let items = dock_items.borrow();
+                    let index = (num as usize).saturating_sub(1);
+                    if let Some((command, _, _)) = items.get(index) {
+                        debug!("Activating app at index {} via shortcut", index);
+                        crate::utils::launcher::launch_command(command);
+                    }
+                }
+                ShortcutAction::ToggleDock => {
+                    debug!("Toggle dock via shortcut");
+                    // Toggle visibility
+                    if window.is_visible() {
+                        window.set_visible(false);
+                    } else {
+                        window.set_visible(true);
+                        window.present();
+                    }
+                }
+                ShortcutAction::ShowSearch => {
+                    debug!("Show search via shortcut");
+                    // TODO: Integrate search overlay
+                }
+                ShortcutAction::NavigateLeft | ShortcutAction::NavigateRight => {
+                    let items = dock_items.borrow();
+                    let mut focused = focused_index.borrow_mut();
+                    
+                    let direction = if matches!(action, ShortcutAction::NavigateLeft) { -1i32 } else { 1 };
+                    
+                    let new_index = match *focused {
+                        Some(idx) => {
+                            let new_idx = (idx as i32 + direction).rem_euclid(items.len() as i32) as usize;
+                            Some(new_idx)
+                        }
+                        None => {
+                            if !items.is_empty() { Some(0) } else { None }
+                        }
+                    };
+                    
+                    *focused = new_index;
+                    debug!("Keyboard navigation: focused index = {:?}", new_index);
+                    
+                    // Update visual focus
+                    for (i, (_, item, _)) in items.iter().enumerate() {
+                        let widget = item.borrow().widget().clone();
+                        widget.remove_css_class("dock-item-focused");
+                        if new_index == Some(i) {
+                            widget.add_css_class("dock-item-focused");
+                        }
+                    }
+                }
+                ShortcutAction::ActivateFocused => {
+                    let items = dock_items.borrow();
+                    let focused = focused_index.borrow();
+                    
+                    if let Some(idx) = *focused {
+                        if let Some((command, _, _)) = items.get(idx) {
+                            debug!("Activating focused item at index {}", idx);
+                            crate::utils::launcher::launch_command(command);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        });
+
+        // Attach keyboard controller to window
+        self.keyboard_service.setup_keyboard_controller(&self.window);
+        
+        info!("Keyboard shortcuts enabled");
     }
 
     /// Setup auto-hide functionality

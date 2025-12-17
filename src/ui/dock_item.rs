@@ -1,6 +1,6 @@
 //! Dock item widget
 //!
-//! Individual dock item representing a pinned application.
+//! Individual dock item representing a pinned or running application.
 
 use gtk::prelude::*;
 use gtk::{Button, Image, GestureClick};
@@ -21,6 +21,10 @@ pub struct DockItem {
     preview: Rc<RefCell<WindowPreview>>,
     css_provider: gtk::CssProvider,
     app_name: String,
+    app_command: String,
+    app_icon: String,
+    desktop_file: Option<String>,
+    is_pinned: bool,
 }
 
 impl DockItem {
@@ -34,10 +38,13 @@ impl DockItem {
         
         let preview = Rc::new(RefCell::new(WindowPreview::new(&button)));
         let app_name = app.name.clone();
+        let app_command = app.command.clone();
+        let app_icon = app.icon.clone();
+        let desktop_file = app.desktop_file.clone();
         
         Self::setup_click_handler(&button, app);
         Self::setup_hover_effects(&button, settings, Rc::clone(&preview), &app_name, Rc::clone(&indicator));
-        Self::setup_context_menu(&button, app);
+        Self::setup_context_menu(&button, app, true);
         
         Self { 
             button, 
@@ -46,6 +53,63 @@ impl DockItem {
             preview, 
             css_provider,
             app_name,
+            app_command,
+            app_icon,
+            desktop_file,
+            is_pinned: true,
+        }
+    }
+
+    /// Create a new dock item for a running (non-pinned) application
+    pub fn new_running(name: &str, icon: &str, command: &str, desktop_file: Option<&str>, settings: &Settings) -> Self {
+        let app = PinnedApp {
+            name: name.to_string(),
+            icon: icon.to_string(),
+            command: command.to_string(),
+            desktop_file: desktop_file.map(|s| s.to_string()),
+        };
+        
+        let indicator = Rc::new(RefCell::new(RunningIndicator::new()));
+        // Set initial running state
+        indicator.borrow_mut().set_state(RunningState::Running { window_count: 1 });
+        
+        let badge = Badge::new(BadgeType::Count(0), BadgePosition::TopRight);
+        let button = Self::create_button(&app, settings, &indicator.borrow(), &badge);
+        let css_provider = gtk::CssProvider::new();
+        button.style_context().add_provider(&css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+        
+        let preview = Rc::new(RefCell::new(WindowPreview::new(&button)));
+        
+        Self::setup_click_handler(&button, &app);
+        Self::setup_hover_effects(&button, settings, Rc::clone(&preview), name, Rc::clone(&indicator));
+        Self::setup_context_menu(&button, &app, false); // Not pinned
+        
+        Self { 
+            button, 
+            indicator, 
+            badge, 
+            preview, 
+            css_provider,
+            app_name: name.to_string(),
+            app_command: command.to_string(),
+            app_icon: icon.to_string(),
+            desktop_file: desktop_file.map(|s| s.to_string()),
+            is_pinned: false,
+        }
+    }
+
+    /// Check if this item is pinned
+    pub fn is_pinned(&self) -> bool {
+        self.is_pinned
+    }
+
+    /// Get app info for pinning
+    pub fn to_pinned_app(&self) -> PinnedApp {
+        PinnedApp {
+            name: self.app_name.clone(),
+            icon: self.app_icon.clone(),
+            command: self.app_command.clone(),
+            desktop_file: self.desktop_file.clone(),
         }
     }
 
@@ -148,18 +212,28 @@ impl DockItem {
     }
 
     /// Setup right-click context menu
-    fn setup_context_menu(button: &Button, app: &PinnedApp) {
+    fn setup_context_menu(button: &Button, app: &PinnedApp, is_pinned: bool) {
         let gesture = GestureClick::new();
         gesture.set_button(3); // Right mouse button
         
         let app_name = app.name.clone();
+        let app_icon = app.icon.clone();
+        let app_command = app.command.clone();
+        let app_desktop = app.desktop_file.clone();
         
         gesture.connect_released(move |gesture, _n, x, y| {
             debug!("Context menu requested for: {}", app_name);
             
             if let Some(widget) = gesture.widget() {
                 // Create popover menu
-                let popover = Self::create_context_menu(&widget, &app_name);
+                let popover = Self::create_context_menu(
+                    &widget, 
+                    &app_name, 
+                    &app_icon, 
+                    &app_command, 
+                    app_desktop.as_deref(),
+                    is_pinned
+                );
                 
                 // Position at click location
                 popover.set_pointing_to(Some(&Rectangle::new(
@@ -179,7 +253,14 @@ impl DockItem {
     }
 
     /// Create the context menu popover
-    fn create_context_menu(parent: &impl IsA<gtk::Widget>, app_name: &str) -> gtk::Popover {
+    fn create_context_menu(
+        parent: &impl IsA<gtk::Widget>, 
+        app_name: &str,
+        app_icon: &str,
+        app_command: &str,
+        desktop_file: Option<&str>,
+        is_pinned: bool,
+    ) -> gtk::Popover {
         let menu_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(4)
@@ -189,18 +270,55 @@ impl DockItem {
             .margin_end(8)
             .build();
 
-        // Unpin button
-        let unpin_btn = Button::builder()
-            .label("Unpin from Dock")
-            .css_classes(vec!["context-menu-item"])
-            .build();
-        
-        let name_clone = app_name.to_string();
-        unpin_btn.connect_clicked(move |_| {
-            debug!("Unpin requested for: {}", name_clone);
-            // TODO: Implement unpin functionality
-        });
-        menu_box.append(&unpin_btn);
+        if is_pinned {
+            // Unpin button for pinned apps
+            let unpin_btn = Button::builder()
+                .label("Unpin from Dock")
+                .css_classes(vec!["context-menu-item"])
+                .build();
+            
+            let name_clone = app_name.to_string();
+            unpin_btn.connect_clicked(move |_| {
+                debug!("Unpin requested for: {}", name_clone);
+                // TODO: Implement unpin functionality
+            });
+            menu_box.append(&unpin_btn);
+        } else {
+            // Keep in Dock button for running apps
+            let keep_btn = Button::builder()
+                .label("Keep in Dock")
+                .css_classes(vec!["context-menu-item"])
+                .build();
+            
+            let name = app_name.to_string();
+            let icon = app_icon.to_string();
+            let command = app_command.to_string();
+            let desktop = desktop_file.map(|s| s.to_string());
+            
+            keep_btn.connect_clicked(move |btn| {
+                info!("Pinning app to dock: {}", name);
+                
+                // Load settings, add app, save
+                if let Ok(mut settings) = crate::config::Settings::load() {
+                    let new_app = PinnedApp {
+                        name: name.clone(),
+                        icon: icon.clone(),
+                        command: command.clone(),
+                        desktop_file: desktop.clone(),
+                    };
+                    settings.add_pinned_app(new_app);
+                    info!("App '{}' added to dock. Restart to see changes.", name);
+                }
+                
+                // Close the popover
+                if let Some(popover) = btn.ancestor(gtk::Popover::static_type()) {
+                    if let Some(p) = popover.downcast_ref::<gtk::Popover>() {
+                        p.popdown();
+                    }
+                }
+            });
+            menu_box.append(&keep_btn);
+        }
 
         // Separator
         let separator = gtk::Separator::new(gtk::Orientation::Horizontal);

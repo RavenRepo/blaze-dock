@@ -3,28 +3,29 @@
 //! Creates and manages the main dock window with Wayland Layer Shell integration.
 
 use gtk::prelude::*;
-use gtk::{Application, ApplicationWindow, Box, Orientation};
+use gtk::{Application, ApplicationWindow, Box, Orientation, Separator};
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
 use log::{debug, info, warn};
 
-use crate::config::{DockPosition, Settings};
-use crate::services::{ProcessTracker, DBusService, WindowTracker, DriveMonitor, RecentFilesService};
+use crate::config::{DockPosition, Settings, PinnedApp};
+use crate::services::{ProcessTracker, DBusService, WindowTracker, DriveMonitor, RecentFilesService, RunningAppsService, RunningApp};
 use crate::ui::{DockItem, RunningState, MagnificationController};
 use std::cell::RefCell;
 use std::rc::Rc;
-use tokio::sync::broadcast;
 
 /// Main dock window wrapper
 pub struct DockWindow {
     window: ApplicationWindow,
-    dock_items: Rc<RefCell<Vec<(String, Rc<RefCell<DockItem>>)>>>,
+    dock_items: Rc<RefCell<Vec<(String, Rc<RefCell<DockItem>>, bool)>>>, // (command, item, is_pinned)
     process_tracker: ProcessTracker,
     window_tracker: WindowTracker,
     drive_monitor: DriveMonitor,
     recent_files: RecentFilesService,
+    running_apps_service: RunningAppsService,
     magnification: Rc<RefCell<MagnificationController>>,
     dbus_service: Option<DBusService>,
     is_hidden: Rc<RefCell<bool>>,
+    settings: Rc<RefCell<Settings>>,
 }
 
 impl DockWindow {
@@ -125,6 +126,12 @@ impl DockWindow {
         let dock_items_stored = Rc::clone(&dock_items);
         let magnification_stored = Rc::clone(&magnification);
         
+        // Initialize running apps service
+        let running_apps_service = RunningAppsService::new();
+        
+        // Store settings
+        let settings_rc = Rc::new(RefCell::new(settings.clone()));
+        
         let self_instance = Self {
             window: window.clone(),
             dock_items: dock_items_stored,
@@ -132,9 +139,11 @@ impl DockWindow {
             window_tracker,
             drive_monitor,
             recent_files,
+            running_apps_service,
             magnification: magnification_stored,
             dbus_service: Some(dbus_service),
             is_hidden: Rc::clone(&is_hidden),
+            settings: settings_rc,
         };
 
         // Setup auto-hide if enabled
@@ -207,7 +216,7 @@ impl DockWindow {
     /// Update running state for all dock items
     pub fn update_running_states(&self) {
         let dock_items = self.dock_items.borrow();
-        for (command, item) in dock_items.iter() {
+        for (command, item, _is_pinned) in dock_items.iter() {
             let is_running = self.process_tracker.is_running(command);
             let mut item = item.borrow_mut();
             let state = if is_running {
@@ -351,14 +360,14 @@ impl DockWindow {
 
     /// Update magnification for all dock items
     fn update_magnification_for_all(
-        dock_items: &Rc<RefCell<Vec<(String, Rc<RefCell<DockItem>>)>>>,
+        dock_items: &Rc<RefCell<Vec<(String, Rc<RefCell<DockItem>>, bool)>>>,
         magnification: &Rc<RefCell<MagnificationController>>,
     ) {
         let mag = magnification.borrow();
         let hover_index = mag.hover_index();
         let items = dock_items.borrow();
         
-        for (index, (_, item)) in items.iter().enumerate() {
+        for (index, (_, item, _)) in items.iter().enumerate() {
             let scale = mag.calculate_scale(index, hover_index);
             item.borrow().set_scale(scale);
         }
@@ -372,11 +381,10 @@ impl DockWindow {
         
         gtk::glib::timeout_add_seconds_local(2, move || {
             let dock_items_guard = dock_items.borrow();
-            for (command, item) in dock_items_guard.iter() {
+            for (command, item, _is_pinned) in dock_items_guard.iter() {
                 let is_running = process_tracker.is_running(command);
                 
                 // Get actual window count if possible
-                // We extract app_id from command (simplified)
                 let app_id = command.split_whitespace().next().unwrap_or(command);
                 let window_count = window_tracker.get_window_count(app_id);
                 
@@ -398,7 +406,7 @@ impl DockWindow {
     /// Create the dock content container with app items
     fn create_dock_content(
         settings: &Settings,
-        dock_items: &Rc<RefCell<Vec<(String, Rc<RefCell<DockItem>>)>>>,
+        dock_items: &Rc<RefCell<Vec<(String, Rc<RefCell<DockItem>>, bool)>>>,
         magnification: &Rc<RefCell<MagnificationController>>,
     ) -> Box {
         let orientation = match settings.position {
@@ -410,8 +418,8 @@ impl DockWindow {
         let main_box = Box::builder()
             .orientation(orientation)
             .spacing(0)
-            .halign(gtk::Align::Center)  // Center horizontally
-            .valign(gtk::Align::Center)  // Center vertically
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
             .vexpand(true)
             .hexpand(true)
             .css_classes(vec!["dock-wrapper"])
@@ -426,7 +434,7 @@ impl DockWindow {
             .css_classes(vec!["dock-container"])
             .build();
 
-        // Add dock items for each pinned app with magnification support
+        // Add pinned apps
         let magnification_ref = Rc::clone(&magnification);
         let dock_items_ref = Rc::clone(&dock_items);
         
@@ -456,14 +464,15 @@ impl DockWindow {
             
             item_widget.add_controller(motion_controller);
             
-            dock_items.borrow_mut().push((command, Rc::clone(&dock_item)));
+            // (command, item, is_pinned=true)
+            dock_items.borrow_mut().push((command, Rc::clone(&dock_item), true));
             dock_box.append(dock_item.borrow().widget());
         }
 
         main_box.append(&dock_box);
 
         debug!(
-            "Dock content created with {} items, orientation={:?}",
+            "Dock content created with {} pinned items, orientation={:?}",
             settings.pinned_apps.len(),
             orientation
         );

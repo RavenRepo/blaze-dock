@@ -93,22 +93,9 @@ impl DockWindow {
         dock_content.set_size_request(width, height);
         window.set_child(Some(&dock_content));
 
-        // Connect D-Bus events to UI
-        let dock_items_dbus = Rc::clone(&dock_items);
-        gtk::glib::spawn_future_local(async move {
-            while let Ok(event) = dbus_rx.recv().await {
-                match event {
-                    crate::services::dbus_service::DBusEvent::BadgeUpdate(app_id, count, _visible) => {
-                        let items = dock_items_dbus.borrow();
-                        for (cmd, item) in items.iter() {
-                            if cmd.contains(&app_id) {
-                                item.borrow_mut().set_badge(crate::ui::BadgeType::Count(count));
-                            }
-                        }
-                    }
-                }
-            }
-        });
+        // D-Bus event handling is currently in placeholder mode
+        // TODO: Implement proper D-Bus event loop when async runtime is set up
+        let _ = dbus_rx; // Acknowledge the receiver (unused for now)
 
         debug!(
             "Window created: position={:?}, size={}x{}, layer_shell={}",

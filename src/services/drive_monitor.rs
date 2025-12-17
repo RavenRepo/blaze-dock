@@ -1,6 +1,7 @@
 //! Drive monitor service
 //!
 //! Monitors removable drives and mounted partitions.
+//! Note: Full async implementation requires proper runtime setup.
 
 use log::{info, debug};
 use std::sync::{Arc, Mutex};
@@ -15,6 +16,7 @@ pub struct DriveInfo {
 }
 
 /// Drive monitor for tracking removable media
+/// Currently a placeholder - full implementation pending async runtime setup
 pub struct DriveMonitor {
     drives: Arc<Mutex<Vec<DriveInfo>>>,
     running: Arc<Mutex<bool>>,
@@ -30,6 +32,8 @@ impl DriveMonitor {
     }
 
     /// Start monitoring drives
+    /// Note: Currently a no-op placeholder. Full drive monitoring will be
+    /// implemented using GIO/udev or periodic lsblk polling.
     pub fn start(&self) {
         let mut running = self.running.lock().unwrap();
         if *running {
@@ -37,29 +41,37 @@ impl DriveMonitor {
         }
         *running = true;
         
-        let drives = Arc::clone(&self.drives);
-        let running_flag = Arc::clone(&self.running);
+        info!("Drive monitor initialized (placeholder mode)");
+        debug!("Full drive monitoring pending async runtime setup");
+        
+        // TODO: Implement proper drive monitoring using:
+        // - GIO volume monitor
+        // - udev events
+        // - Periodic lsblk polling via glib::timeout_add
+        // For now, this is a safe placeholder that doesn't crash.
+    }
 
-        tokio::spawn(async move {
-            info!("Drive monitor started");
-            
-            while *running_flag.lock().unwrap() {
-                // Check for mounted drives using lsblk
-                let output = Command::new("lsblk")
-                    .args(["-J", "-o", "NAME,MOUNTPOINT,RM"])
-                    .output();
-                
-                if let Ok(res) = output {
-                    // Parse JSON output and update drives
-                    // For now, we log the check
-                    debug!("Checked for drives");
-                }
-                
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    /// Get list of currently mounted drives
+    pub fn get_drives(&self) -> Vec<DriveInfo> {
+        // Do a one-time sync check for drives
+        let output = Command::new("lsblk")
+            .args(["-J", "-o", "NAME,MOUNTPOINT,RM"])
+            .output();
+        
+        if let Ok(res) = output {
+            if res.status.success() {
+                // For now, just return the cached list
+                // Full parsing will be implemented later
+                debug!("Drive check completed");
             }
-            
-            info!("Drive monitor stopped");
-        });
+        }
+        
+        self.drives.lock().unwrap().clone()
+    }
+
+    /// Check if monitor is running
+    pub fn is_running(&self) -> bool {
+        *self.running.lock().unwrap()
     }
 
     /// Stop monitoring drives
@@ -74,4 +86,3 @@ impl Default for DriveMonitor {
         Self::new()
     }
 }
-

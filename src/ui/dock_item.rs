@@ -9,30 +9,44 @@ use log::{debug, error, info};
 
 use crate::config::{PinnedApp, Settings};
 use crate::utils::launcher;
-use crate::ui::{RunningIndicator, RunningState, Badge, BadgeType, BadgePosition};
+use crate::ui::{RunningIndicator, RunningState, Badge, BadgeType, BadgePosition, WindowPreview};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 /// A single dock item (application launcher)
 pub struct DockItem {
     button: Button,
-    indicator: RunningIndicator,
+    indicator: Rc<RefCell<RunningIndicator>>,
     badge: Badge,
+    preview: Rc<RefCell<WindowPreview>>,
     css_provider: gtk::CssProvider,
+    app_name: String,
 }
 
 impl DockItem {
     /// Create a new dock item for a pinned application
     pub fn new(app: &PinnedApp, settings: &Settings) -> Self {
-        let indicator = RunningIndicator::new();
+        let indicator = Rc::new(RefCell::new(RunningIndicator::new()));
         let badge = Badge::new(BadgeType::Count(0), BadgePosition::TopRight);
-        let button = Self::create_button(app, settings, &indicator, &badge);
+        let button = Self::create_button(app, settings, &indicator.borrow(), &badge);
         let css_provider = gtk::CssProvider::new();
         button.style_context().add_provider(&css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
         
+        let preview = Rc::new(RefCell::new(WindowPreview::new(&button)));
+        let app_name = app.name.clone();
+        
         Self::setup_click_handler(&button, app);
-        Self::setup_hover_effects(&button, settings);
+        Self::setup_hover_effects(&button, settings, Rc::clone(&preview), &app_name, Rc::clone(&indicator));
         Self::setup_context_menu(&button, app);
         
-        Self { button, indicator, badge, css_provider }
+        Self { 
+            button, 
+            indicator, 
+            badge, 
+            preview, 
+            css_provider,
+            app_name,
+        }
     }
 
     /// Get the underlying widget
@@ -40,14 +54,9 @@ impl DockItem {
         &self.button
     }
 
-    /// Get the running indicator
-    pub fn indicator(&mut self) -> &mut RunningIndicator {
-        &mut self.indicator
-    }
-
     /// Update running state
     pub fn set_running_state(&mut self, state: RunningState) {
-        self.indicator.set_state(state);
+        self.indicator.borrow_mut().set_state(state);
     }
 
     /// Update badge
@@ -57,7 +66,6 @@ impl DockItem {
 
     /// Set magnification scale
     pub fn set_scale(&self, scale: f64) {
-        // Update the existing CSS provider instead of creating a new one
         let scale_css = format!(
             ".dock-item {{ transform: scale({:.3}); }}",
             scale
@@ -67,10 +75,8 @@ impl DockItem {
 
     /// Create the button widget with icon, indicator and badge
     fn create_button(app: &PinnedApp, settings: &Settings, indicator: &RunningIndicator, badge: &Badge) -> Button {
-        // Overlay to hold badge on top of icon
         let overlay = gtk::Overlay::builder().build();
 
-        // Container for icon and indicator
         let item_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(4)
@@ -79,28 +85,21 @@ impl DockItem {
             .css_classes(vec!["dock-item-content"])
             .build();
 
-        // Create icon from theme or path
         let image = Image::from_icon_name(&app.icon);
         image.set_pixel_size(settings.icon_size as i32);
         image.add_css_class("dock-item-icon");
         
         item_box.append(&image);
-        
-        // Add running indicator below icon
         item_box.append(indicator.widget());
 
         overlay.set_child(Some(&item_box));
-        
-        // Add badge as overlay
         overlay.add_overlay(badge.widget());
 
-        let button = Button::builder()
+        Button::builder()
             .css_classes(vec!["dock-item"])
             .tooltip_text(&app.name)
             .child(&overlay)
-            .build();
-
-        button
+            .build()
     }
 
     /// Setup click handler to launch application
@@ -111,39 +110,41 @@ impl DockItem {
         button.connect_clicked(move |_| {
             info!("Launching application: {}", name);
             
-            // Launch the application (spawns process and returns immediately)
             if let Err(e) = launcher::launch_command(&command) {
                 error!("Failed to launch '{}': {}", command, e);
             }
         });
     }
 
-    /// Setup hover zoom effects
-    fn setup_hover_effects(button: &Button, settings: &Settings) {
-        if !settings.hover_zoom {
-            return;
-        }
-
-        let scale = settings.hover_zoom_scale;
-        
-        // Create event controllers for hover
+    /// Setup hover effects (magnification and window previews)
+    fn setup_hover_effects(button: &Button, settings: &Settings, preview: Rc<RefCell<WindowPreview>>, app_name: &str, indicator: Rc<RefCell<RunningIndicator>>) {
         let motion_controller = gtk::EventControllerMotion::new();
         
-        motion_controller.connect_enter(move |controller, _x, _y| {
-            if let Some(widget) = controller.widget() {
-                widget.add_css_class("dock-item-hover");
+        let app_name_clone = app_name.to_string();
+        let preview_clone = Rc::clone(&preview);
+        let indicator_clone = Rc::clone(&indicator);
+        
+        motion_controller.connect_enter(move |_, _, _| {
+            // Show preview if app is running
+            let state = indicator_clone.borrow().state();
+            match state {
+                RunningState::Running { window_count } | RunningState::Focused { window_count } => {
+                    preview_clone.borrow().show_previews(&app_name_clone, window_count);
+                }
+                _ => {}
             }
         });
 
-        motion_controller.connect_leave(move |controller| {
-            if let Some(widget) = controller.widget() {
-                widget.remove_css_class("dock-item-hover");
-            }
+        let preview_leave = Rc::clone(&preview);
+        motion_controller.connect_leave(move |_| {
+            preview_leave.borrow().hide();
         });
 
         button.add_controller(motion_controller);
         
-        debug!("Hover effects configured with scale: {}", scale);
+        if settings.hover_zoom {
+            // magnification is handled by window-level controller
+        }
     }
 
     /// Setup right-click context menu

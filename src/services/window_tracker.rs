@@ -1,6 +1,7 @@
 //! Window tracker service
 //!
 //! Tracks open windows via Wayland protocols or D-Bus (KDE/GNOME fallbacks).
+//! Note: Full async implementation requires proper runtime setup.
 
 use log::{info, debug};
 use std::sync::{Arc, Mutex};
@@ -16,6 +17,7 @@ pub struct WindowInfo {
 }
 
 /// Window tracker for monitoring open windows
+/// Currently a placeholder - full implementation pending async runtime setup
 #[derive(Clone)]
 pub struct WindowTracker {
     windows: Arc<Mutex<Vec<WindowInfo>>>,
@@ -34,6 +36,8 @@ impl WindowTracker {
     }
 
     /// Start tracking windows
+    /// Note: Currently a no-op placeholder. Full window tracking requires
+    /// either Wayland foreign-toplevel protocol or D-Bus integration.
     pub fn start(&self) {
         let mut running = self.running.lock().unwrap();
         if *running {
@@ -41,28 +45,35 @@ impl WindowTracker {
         }
         *running = true;
         
-        let app_counts = Arc::clone(&self.app_window_counts);
-        let running_flag = Arc::clone(&self.running);
-
-        tokio::spawn(async move {
-            info!("Window tracker started");
-            
-            // On KDE, we can use org.kde.KWin D-Bus interface
-            // For now, we simulate window tracking or use a generic approach
-            
-            while *running_flag.lock().unwrap() {
-                // TODO: Implement actual window enumeration
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            }
-            
-            info!("Window tracker stopped");
-        });
+        info!("Window tracker initialized (placeholder mode)");
+        debug!("Full window tracking (Wayland/D-Bus) pending async runtime setup");
+        
+        // TODO: Implement proper window tracking using:
+        // - Wayland foreign-toplevel protocol for wlroots compositors
+        // - org.kde.KWin D-Bus interface for KDE
+        // - org.gnome.Shell D-Bus interface for GNOME
+        // For now, this is a safe placeholder that doesn't crash.
     }
 
     /// Get number of windows for a specific app_id
     pub fn get_window_count(&self, app_id: &str) -> u32 {
         let counts = self.app_window_counts.lock().unwrap();
         counts.get(app_id).copied().unwrap_or(0)
+    }
+
+    /// Update window count for an app (can be called from external process)
+    pub fn set_window_count(&self, app_id: &str, count: u32) {
+        let mut counts = self.app_window_counts.lock().unwrap();
+        if count == 0 {
+            counts.remove(app_id);
+        } else {
+            counts.insert(app_id.to_string(), count);
+        }
+    }
+
+    /// Check if tracker is running
+    pub fn is_running(&self) -> bool {
+        *self.running.lock().unwrap()
     }
 
     /// Stop tracking windows
@@ -77,4 +88,3 @@ impl Default for WindowTracker {
         Self::new()
     }
 }
-

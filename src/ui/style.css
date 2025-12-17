@@ -3,38 +3,31 @@
  * 
  * A modern, dark, semi-transparent dock aesthetic
  * inspired by Plesk control panel and macOS dock.
+ * 
+ * Note: GTK4 CSS is NOT web CSS. Many properties are unsupported:
+ * - position: absolute/relative
+ * - z-index
+ * - pointer-events
+ * - top/left/right/bottom positioning
+ * - percentage values in transforms
  */
 
 /* ===== Main Window ===== */
 .blazedock-window {
     background-color: transparent;
-    transition: transform 400ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease;
+    transition: opacity 300ms ease;
 }
 
-/* Hidden states based on position */
-.dock-hidden-bottom {
-    transform: translateY(85%);
-    opacity: 0.15;
-}
-
-.dock-hidden-top {
-    transform: translateY(-85%);
-    opacity: 0.15;
-}
-
-.dock-hidden-left {
-    transform: translateX(-85%);
-    opacity: 0.15;
-}
-
+/* Hidden states - using opacity for now until layer-shell provides transform support */
+.dock-hidden-bottom,
+.dock-hidden-top,
+.dock-hidden-left,
 .dock-hidden-right {
-    transform: translateX(85%);
-    opacity: 0.15;
+    opacity: 0.05;
 }
 
 /* Visible state */
 .dock-visible {
-    transform: none;
     opacity: 1;
 }
 
@@ -84,6 +77,8 @@
     transition: 
         background-color 200ms ease-in-out,
         transform 150ms ease-out;
+    
+    transform-origin: center center;
 }
 
 .dock-item:hover,
@@ -111,24 +106,8 @@
 
 /* ===== Hover Zoom Effect ===== */
 .dock-item-hover {
-    /* Scale up on hover - handled via CSS transform */
+    /* Scale up on hover */
     transform: scale(1.15);
-    transition: transform 200ms cubic-bezier(0.4, 0.0, 0.2, 1);
-}
-
-/* Magnification via CSS custom property */
-.dock-item {
-    transition: transform 150ms cubic-bezier(0.1, 0.7, 0.1, 1);
-    transform-origin: center center;
-    border: none;
-    background: transparent;
-    padding: 0;
-    margin: 0;
-}
-
-.dock-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
 }
 
 /* ===== Running Indicator ===== */
@@ -151,7 +130,7 @@
 
 .indicator-dot {
     background-color: rgba(255, 255, 255, 0.6);
-    border-radius: 50%;
+    border-radius: 50px;
     min-width: 6px;
     min-height: 6px;
     margin: 0 2px;
@@ -176,12 +155,11 @@
 /* ===== Dock Item Content Container ===== */
 .dock-item-content {
     padding: 4px;
-    position: relative;
 }
 
 /* ===== Badge System ===== */
+/* Note: Badge positioning handled via GTK Overlay, not CSS positioning */
 .badge {
-    position: absolute;
     min-width: 18px;
     min-height: 18px;
     border-radius: 9px;
@@ -190,38 +168,10 @@
     font-size: 11px;
     font-weight: bold;
     padding: 2px 6px;
-    z-index: 10;
 }
 
 .badge-hidden {
     opacity: 0;
-    pointer-events: none;
-}
-
-.badge-top-right {
-    top: -4px;
-    right: -4px;
-}
-
-.badge-bottom-right {
-    bottom: -4px;
-    right: -4px;
-}
-
-.badge-top-left {
-    top: -4px;
-    left: -4px;
-}
-
-.badge-bottom-left {
-    bottom: -4px;
-    left: -4px;
-}
-
-.badge-center {
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
 }
 
 .badge-label {
@@ -243,6 +193,47 @@
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
+}
+
+/* ===== Window Previews ===== */
+.window-preview-popover {
+    background-color: rgba(20, 20, 28, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.window-preview-content {
+    padding: 12px;
+}
+
+.window-preview-header {
+    font-weight: bold;
+    font-size: 14px;
+    color: white;
+    margin-bottom: 8px;
+}
+
+.window-preview-item {
+    padding: 8px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.05);
+    transition: background-color 200ms ease;
+}
+
+.window-preview-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.window-preview-thumbnail {
+    border-radius: 8px;
+    background-color: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.window-preview-title {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
 }
 
 /* ===== Scrollbar Styling ===== */
@@ -303,14 +294,11 @@ tooltip {
 }
 
 /* ===== Running App Indicator ===== */
-/* Note: GTK4 doesn't support ::after pseudo-elements, 
-   using CSS class instead for running indicators */
 .dock-item-running {
     border-bottom: 3px solid rgba(255, 255, 255, 0.8);
 }
 
 /* ===== High Contrast Mode Support ===== */
-/* Note: Using GTK's built-in high-contrast support */
 .dock-container-high-contrast {
     background-color: rgba(0, 0, 0, 0.95);
     border: 2px solid rgba(255, 255, 255, 0.3);
@@ -319,4 +307,3 @@ tooltip {
 .dock-item-high-contrast:hover {
     background-color: rgba(255, 255, 255, 0.25);
 }
-

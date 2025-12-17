@@ -189,7 +189,7 @@ impl DockItem {
             .margin_end(8)
             .build();
 
-        // Add menu items
+        // Unpin button
         let unpin_btn = Button::builder()
             .label("Unpin from Dock")
             .css_classes(vec!["context-menu-item"])
@@ -200,8 +200,43 @@ impl DockItem {
             debug!("Unpin requested for: {}", name_clone);
             // TODO: Implement unpin functionality
         });
-
         menu_box.append(&unpin_btn);
+
+        // Separator
+        let separator = gtk::Separator::new(gtk::Orientation::Horizontal);
+        menu_box.append(&separator);
+
+        // Edit Config button - opens config file
+        let config_btn = Button::builder()
+            .label("Edit Dock Config")
+            .css_classes(vec!["context-menu-item"])
+            .build();
+        
+        config_btn.connect_clicked(move |_| {
+            debug!("Opening config file");
+            let home = std::env::var("HOME").unwrap_or_default();
+            let config_path = format!("{}/.config/blazedock/blazedock.toml", home);
+            
+            // Try to open with default text editor
+            if let Err(e) = std::process::Command::new("xdg-open")
+                .arg(&config_path)
+                .spawn()
+            {
+                error!("Failed to open config: {}", e);
+            }
+        });
+        menu_box.append(&config_btn);
+
+        // Reload button
+        let reload_btn = Button::builder()
+            .label("Reload Dock")
+            .css_classes(vec!["context-menu-item"])
+            .build();
+        
+        reload_btn.connect_clicked(move |_| {
+            info!("Reload requested - restart BlazeDock to apply changes");
+        });
+        menu_box.append(&reload_btn);
 
         let popover = gtk::Popover::builder()
             .child(&menu_box)

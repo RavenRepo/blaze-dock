@@ -384,17 +384,14 @@ impl DockWindow {
             DockPosition::Top | DockPosition::Bottom => Orientation::Horizontal,
         };
 
-        // Main container that holds everything
+        // Main container - CENTER aligned for proper dock positioning
         let main_box = Box::builder()
             .orientation(orientation)
             .spacing(0)
-            .halign(gtk::Align::Fill)
-            .valign(gtk::Align::Fill)
+            .halign(gtk::Align::Center)  // Center horizontally
+            .valign(gtk::Align::Center)  // Center vertically
             .vexpand(true)
-            .hexpand(match settings.position {
-                DockPosition::Top | DockPosition::Bottom => true,
-                _ => false,
-            })
+            .hexpand(true)
             .css_classes(vec!["dock-wrapper"])
             .build();
 

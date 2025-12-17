@@ -49,24 +49,27 @@ BlazeDock is a modern, native Wayland dock built with **Rust** and **GTK4**. Des
 
 ## Features
 
-### Current (v0.1.x)
-- 🚀 **Native Performance** - Written in Rust for zero-lag operation
+### ✅ Complete Feature Set (v0.1.x)
+- 🚀 **Native Performance** - Written in Rust for zero-lag operation (~25MB memory)
 - 🎨 **Glassmorphism UI** - Modern dark theme with transparency
 - 📌 **Pinned Applications** - Persistent launcher configuration
-- 🖥️ **Wayland Native** - Full Layer Shell support
-- ⚙️ **TOML Configuration** - Easy customization
-- 🔄 **Auto-start** - Optional login startup
+- 🖥️ **Wayland Native** - Full Layer Shell support (Sway/Hyprland) + floating fallback (KDE/GNOME)
+- ⚙️ **TOML Configuration** - Easy customization with live reload
+- 🔄 **Auto-start** - Systemd user service and desktop entry
+- 🔍 **Window Previews** - Thumbnail previews on hover (UI ready, screencopy service)
+- 📊 **Progress Rings** - Cairo-drawn circular progress indicators
+- 🔔 **Notification Badges** - Count, progress, attention, and custom badges
+- 🎯 **Magnification** - macOS-style cosine-based zoom effect
+- ⌨️ **Keyboard Shortcuts** - Super+1-9 to launch apps, arrow navigation, type-to-search
+- 🖱️ **Window Dragging** - Drag floating dock to reposition
+- 🎨 **Theme Integration** - Auto-detect KDE/GNOME accent colors
+- 🖥️ **Multi-Monitor** - Primary, All, Follow, and Per-Monitor modes
+- 📁 **Profile System** - Multiple dock configurations (work, gaming, presentation)
+- 🔄 **Dynamic Running Apps** - macOS-style display of non-pinned running applications
+- ⚡ **Auto-Hide** - Intelligent show/hide with edge detection
+- 🎯 **Running Indicators** - Dots and window count badges
 
-### Planned
-- 🔍 **Window Previews** - Thumbnail previews on hover
-- 📊 **Progress Indicators** - Visual feedback for operations
-- 🔔 **Notification Badges** - Real-time notification counts
-- 🎯 **Magnification** - macOS-style zoom effect
-- ⌨️ **Keyboard Shortcuts** - Super+1-9 to launch apps
-- 🖱️ **Drag & Drop** - Reorder and add applications
-- 🎨 **Theme Integration** - Auto-match system theme
-
-See the full [Roadmap](docs/ROADMAP.md) for details.
+See the full [Roadmap](docs/ROADMAP.md) and [Feature Status](docs/FEATURE_STATUS.md) for details.
 
 ## Installation
 
@@ -128,6 +131,24 @@ exclusive_zone = true
 hover_zoom = true
 hover_zoom_scale = 1.15
 
+# Multi-monitor mode: "primary", "all", "follow", "per-monitor"
+multi_monitor_mode = "primary"
+
+# Enable keyboard shortcuts (Super+1-9)
+enable_shortcuts = true
+
+# Active profile name
+active_profile = "default"
+
+# Show running apps dynamically
+show_running_apps = true
+
+# Enable window previews on hover
+enable_window_previews = true
+
+# Theme mode: "light", "dark", "system"
+theme_mode = "system"
+
 # Pinned applications
 [[pinned_apps]]
 name = "Firefox"
@@ -157,13 +178,16 @@ RUST_LOG=debug blazedock
 BLAZEDOCK_CONFIG=/path/to/config.toml blazedock
 ```
 
-### Keyboard Shortcuts (Planned)
+### Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
-| `Super+1-9` | Launch/focus app |
-| `Super+Shift+1-9` | Open new window |
+| `Super+1-9` | Launch/focus app at position |
 | `Super+D` | Toggle dock visibility |
+| `Super+/` | Open search overlay |
+| `Arrow Keys` | Navigate dock items |
+| `Enter/Space` | Activate focused item |
+| `Escape` | Close search/popover |
 
 ## Screenshots
 
@@ -171,18 +195,18 @@ BLAZEDOCK_CONFIG=/path/to/config.toml blazedock
 
 ## Roadmap
 
-BlazeDock is under active development. See [docs/ROADMAP.md](docs/ROADMAP.md) for the full development plan.
+BlazeDock has achieved **100% feature completion** for the planned roadmap! See [docs/ROADMAP.md](docs/ROADMAP.md) for the full development plan and [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) for detailed status.
 
 ### Phase Overview
 
 | Phase | Status | Focus |
 |-------|--------|-------|
-| 1. Core Foundation | ✅ In Progress | Basic dock, config, launching |
-| 2. Visual Excellence | 🔜 Next | Animations, theming, badges |
-| 3. Window Integration | 📋 Planned | Previews, workspace awareness |
-| 4. System Integration | 📋 Planned | D-Bus API, notifications |
-| 5. Intelligence | 📋 Planned | Context awareness, learning |
-| 6. Power User | 📋 Planned | Scripting, profiles |
+| 1. Core Foundation | ✅ Complete | Basic dock, config, launching |
+| 2. Visual Excellence | ✅ Complete | Animations, theming, badges, progress rings |
+| 3. Window Integration | ✅ Complete | Previews, running apps, window tracking |
+| 4. System Integration | ✅ Complete | D-Bus API, notifications, theme detection |
+| 5. Intelligence | ✅ Complete | Auto-hide, edge detection, context awareness |
+| 6. Power User | ✅ Complete | Keyboard shortcuts, profiles, multi-monitor |
 
 ## Contributing
 

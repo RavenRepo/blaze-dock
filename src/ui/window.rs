@@ -234,10 +234,32 @@ impl DockWindow {
         window.set_default_size(width, height);
         
         // Keep window on top
-        // Note: This may not work on all Wayland compositors
         window.set_deletable(true);
         
-        info!("Floating window configured: {}x{}", width, height);
+        // Enable window dragging with left mouse button
+        let drag_gesture = gtk::GestureDrag::new();
+        drag_gesture.set_button(1); // Left mouse button
+        
+        let window_weak = window.downgrade();
+        drag_gesture.connect_drag_begin(move |gesture, x, y| {
+            if let Some(win) = window_weak.upgrade() {
+                // Get the GDK surface and initiate a move
+                if let Some(native) = win.native() {
+                    if let Some(surface) = native.surface() {
+                        // Use the toplevel's begin_move for Wayland compatibility
+                        if let Some(toplevel) = surface.downcast_ref::<gtk::gdk::Toplevel>() {
+                            let device = gesture.device().unwrap();
+                            let timestamp = gesture.current_event_time();
+                            toplevel.begin_move(&device, 1, x, y, timestamp);
+                        }
+                    }
+                }
+            }
+        });
+        
+        window.add_controller(drag_gesture);
+        
+        info!("Floating window configured: {}x{} (draggable)", width, height);
     }
 
     /// Present the window

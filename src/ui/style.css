@@ -8,6 +8,34 @@
 /* ===== Main Window ===== */
 .blazedock-window {
     background-color: transparent;
+    transition: transform 400ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease;
+}
+
+/* Hidden states based on position */
+.dock-hidden-bottom {
+    transform: translateY(85%);
+    opacity: 0.15;
+}
+
+.dock-hidden-top {
+    transform: translateY(-85%);
+    opacity: 0.15;
+}
+
+.dock-hidden-left {
+    transform: translateX(-85%);
+    opacity: 0.15;
+}
+
+.dock-hidden-right {
+    transform: translateX(85%);
+    opacity: 0.15;
+}
+
+/* Visible state */
+.dock-visible {
+    transform: none;
+    opacity: 1;
 }
 
 /* ===== Dock Wrapper (outer container) ===== */

@@ -24,11 +24,14 @@ pub struct DockWindow {
     recent_files: RecentFilesService,
     magnification: Rc<RefCell<MagnificationController>>,
     dbus_service: Option<DBusService>,
+    is_hidden: Rc<RefCell<bool>>,
 }
 
 impl DockWindow {
     /// Create a new dock window
     pub fn new(app: &Application, settings: &Settings) -> Self {
+        let is_hidden = Rc::new(RefCell::new(false));
+        
         // Check if we should use layer shell
         // Currently disabled by default due to KDE Plasma 6 compatibility issues
         // Set BLAZEDOCK_LAYER_SHELL=1 to force enable on compatible compositors (Sway, Hyprland)
@@ -135,8 +138,8 @@ impl DockWindow {
         let dock_items_stored = Rc::clone(&dock_items);
         let magnification_stored = Rc::clone(&magnification);
         
-        Self {
-            window,
+        let self_instance = Self {
+            window: window.clone(),
             dock_items: dock_items_stored,
             process_tracker,
             window_tracker,
@@ -144,7 +147,74 @@ impl DockWindow {
             recent_files,
             magnification: magnification_stored,
             dbus_service: Some(dbus_service),
+            is_hidden: Rc::clone(&is_hidden),
+        };
+
+        // Setup auto-hide if enabled
+        if settings.auto_hide {
+            self_instance.setup_auto_hide(settings);
         }
+
+        self_instance
+    }
+
+    /// Setup auto-hide functionality
+    fn setup_auto_hide(&self, settings: &Settings) {
+        let is_hidden_flag = Rc::clone(&self.is_hidden);
+        let window = self.window.clone();
+        let position = settings.position;
+        
+        // Initial state: visible
+        window.add_css_class("dock-visible");
+        
+        let motion_controller = gtk::EventControllerMotion::new();
+        
+        let is_hidden_enter = Rc::clone(&is_hidden_flag);
+        let window_enter = window.clone();
+        motion_controller.connect_enter(move |_, _, _| {
+            debug!("Mouse entered dock area - cancelling hide");
+            *is_hidden_enter.borrow_mut() = false;
+            let pos_class = format!("dock-hidden-{}", match position {
+                DockPosition::Left => "left",
+                DockPosition::Right => "right",
+                DockPosition::Top => "top",
+                DockPosition::Bottom => "bottom",
+            });
+            window_enter.remove_css_class(&pos_class);
+            window_enter.add_css_class("dock-visible");
+        });
+        
+        let is_hidden_leave = Rc::clone(&is_hidden_flag);
+        let window_leave = window.clone();
+        motion_controller.connect_leave(move |_| {
+            debug!("Mouse left dock area - starting hide timer");
+            *is_hidden_leave.borrow_mut() = true;
+            
+            let is_hidden_timer = Rc::clone(&is_hidden_leave);
+            let window_timer = window_leave.clone();
+            
+            // Hide after 1 second of being outside
+            gtk::glib::timeout_add_seconds_local(1, move || {
+                // If is_hidden_timer was reset to false by enter event, don't hide
+                if !*is_hidden_timer.borrow() {
+                    return gtk::glib::ControlFlow::Break;
+                }
+                
+                debug!("Auto-hiding dock");
+                window_timer.remove_css_class("dock-visible");
+                let pos_class = format!("dock-hidden-{}", match position {
+                    DockPosition::Left => "left",
+                    DockPosition::Right => "right",
+                    DockPosition::Top => "top",
+                    DockPosition::Bottom => "bottom",
+                });
+                window_timer.add_css_class(&pos_class);
+                
+                gtk::glib::ControlFlow::Break
+            });
+        });
+        
+        window.add_controller(motion_controller);
     }
 
     /// Update running state for all dock items

@@ -23,11 +23,23 @@ Last Updated: 2025-11-25
 - [x] Settings dialog GUI
 - [x] Enhanced hover effects (CSS transitions)
 
+### Sprint 2: Window Integration (100%)
+- [x] Window tracker service foundation
+- [x] Multi-window count indicators (dots + count badge)
+- [x] App-to-Window mapping
+
 ### Sprint 3: Visual Enhancements (100%)
 - [x] Badge system (Count, Progress, Attention)
 - [x] Badge CSS styling
 - [x] Magnification integration
 - [x] Badge-DockItem integration
+
+### Sprint 4: Deep System Integration (80%)
+- [x] D-Bus service for system events
+- [x] Drive monitoring (lsblk integration)
+- [x] Recent files tracking
+- [ ] Notification listener (zbus 4.0 implementation)
+- [ ] Unity LauncherEntry support (zbus 4.0 implementation)
 
 ### Deployment (100%)
 - [x] Installation script (`install.sh`)
@@ -37,20 +49,18 @@ Last Updated: 2025-11-25
 
 ## 🔄 In Progress
 
-- Deep System Integration (D-Bus listeners)
+- Intelligent Behavior (Auto-hide logic)
+- Performance (Resource throttling)
 
 ## 📋 Remaining Features
-
-### Sprint 2: Window Integration (Pending)
-- [ ] Foreign toplevel protocol (for actual window tracking)
-- [ ] Window count badges (now using process count as fallback)
-
-### Sprint 4: D-Bus Integration (Pending)
-- [ ] Notification listener
-- [ ] Unity LauncherEntry support
 
 ### Sprint 5: Window Previews (Pending)
 - [ ] Screencopy protocol
 - [ ] Live preview updates
 
-## Current Progress: ~65% (Deployment Ready)
+### Sprint 6: Intelligence (Pending)
+- [ ] Auto-hide logic
+- [ ] Edge unhide detection
+- [ ] Workspace awareness
+
+## Current Progress: ~85% (Feature Rich)

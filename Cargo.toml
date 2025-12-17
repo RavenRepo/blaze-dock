@@ -24,7 +24,7 @@ toml = "0.8"
 directories = "5.0"
 
 # Async runtime for non-blocking operations
-tokio = { version = "1.0", features = ["rt", "process", "macros"] }
+tokio = { version = "1.0", features = ["rt", "process", "macros", "full"] }
 
 # Logging infrastructure
 log = "0.4"
@@ -46,28 +46,17 @@ which = "6.0"
 # Home directory resolution
 dirs = "5.0"
 
-# ============================================
-# Phase 2+: Advanced Features (Optional)
-# ============================================
-
 # D-Bus integration for system services
-zbus = { version = "4.0", optional = true }
+zbus = "4.0"
 
-# Wayland protocols for window tracking
-wayland-client = { version = "0.31", optional = true }
-wayland-protocols-wlr = { version = "0.3", optional = true }
+# Async utilities
+futures-util = "0.3"
 
 # Process monitoring for app health
-procfs = { version = "0.16", optional = true }
-
-# Usage statistics database
-rusqlite = { version = "0.31", features = ["bundled"], optional = true }
-
-# Color manipulation for theming
-palette = { version = "0.7", optional = true }
+procfs = "0.16"
 
 # Cairo for custom drawing (badges, progress rings)
-cairo-rs = { version = "0.20", features = ["v1_16"], optional = true }
+cairo-rs = { version = "0.20", features = ["v1_16"] }
 
 [profile.release]
 # Link Time Optimization for maximum performance
@@ -92,21 +81,9 @@ default = []
 # Enable debug overlay for development
 debug-overlay = []
 
-# Phase 2: D-Bus API and notifications
-dbus = ["zbus"]
+# Wayland protocols for window tracking (Sprint 2)
+window-tracking = []
 
-# Phase 3: Window tracking and previews  
-window-tracking = ["wayland-client", "wayland-protocols-wlr"]
-
-# Phase 4: System integration
-system-integration = ["procfs", "dbus"]
-
-# Phase 5: Usage learning
-intelligence = ["rusqlite"]
-
-# Phase 6: Advanced theming
-advanced-theming = ["palette", "cairo-rs"]
-
-# All features enabled
-full = ["dbus", "window-tracking", "system-integration", "intelligence", "advanced-theming"]
+# Usage statistics database (Sprint 5)
+intelligence = []
 

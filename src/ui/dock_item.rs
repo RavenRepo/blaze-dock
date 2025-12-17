@@ -9,24 +9,30 @@ use log::{debug, error, info};
 
 use crate::config::{PinnedApp, Settings};
 use crate::utils::launcher;
-use crate::ui::{RunningIndicator, RunningState};
+use crate::ui::{RunningIndicator, RunningState, Badge, BadgeType, BadgePosition};
 
 /// A single dock item (application launcher)
 pub struct DockItem {
     button: Button,
     indicator: RunningIndicator,
+    badge: Badge,
+    css_provider: gtk::CssProvider,
 }
 
 impl DockItem {
     /// Create a new dock item for a pinned application
     pub fn new(app: &PinnedApp, settings: &Settings) -> Self {
         let indicator = RunningIndicator::new();
-        let button = Self::create_button(app, settings, &indicator);
+        let badge = Badge::new(BadgeType::Count(0), BadgePosition::TopRight);
+        let button = Self::create_button(app, settings, &indicator, &badge);
+        let css_provider = gtk::CssProvider::new();
+        button.style_context().add_provider(&css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+        
         Self::setup_click_handler(&button, app);
         Self::setup_hover_effects(&button, settings);
         Self::setup_context_menu(&button, app);
         
-        Self { button, indicator }
+        Self { button, indicator, badge, css_provider }
     }
 
     /// Get the underlying widget
@@ -44,8 +50,26 @@ impl DockItem {
         self.indicator.set_state(state);
     }
 
-    /// Create the button widget with icon and indicator
-    fn create_button(app: &PinnedApp, settings: &Settings, indicator: &RunningIndicator) -> Button {
+    /// Update badge
+    pub fn set_badge(&mut self, badge_type: BadgeType) {
+        self.badge.set_type(badge_type);
+    }
+
+    /// Set magnification scale
+    pub fn set_scale(&self, scale: f64) {
+        // Update the existing CSS provider instead of creating a new one
+        let scale_css = format!(
+            ".dock-item {{ transform: scale({:.3}); }}",
+            scale
+        );
+        self.css_provider.load_from_data(&scale_css);
+    }
+
+    /// Create the button widget with icon, indicator and badge
+    fn create_button(app: &PinnedApp, settings: &Settings, indicator: &RunningIndicator, badge: &Badge) -> Button {
+        // Overlay to hold badge on top of icon
+        let overlay = gtk::Overlay::builder().build();
+
         // Container for icon and indicator
         let item_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
@@ -65,10 +89,15 @@ impl DockItem {
         // Add running indicator below icon
         item_box.append(indicator.widget());
 
+        overlay.set_child(Some(&item_box));
+        
+        // Add badge as overlay
+        overlay.add_overlay(badge.widget());
+
         let button = Button::builder()
             .css_classes(vec!["dock-item"])
             .tooltip_text(&app.name)
-            .child(&item_box)
+            .child(&overlay)
             .build();
 
         button

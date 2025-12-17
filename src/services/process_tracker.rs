@@ -16,22 +16,33 @@ fn command_to_process_name(command: &str) -> String {
     command.split_whitespace().next().unwrap_or(command).to_string()
 }
 
-/// Check if a process is running
-fn is_process_running(process_name: &str) -> bool {
-    // Use pgrep to check if process is running
-    // This is a simple approach - in production we'd use procfs
-    let output = Command::new("pgrep")
-        .arg("-x")
-        .arg(process_name)
+/// Update the running state of all apps in one pass
+fn update_all_apps(apps: &Arc<Mutex<HashMap<String, bool>>>) {
+    // Get all running processes in one command
+    let output = Command::new("ps")
+        .args(["-e", "-o", "comm="])
         .output();
     
-    match output {
-        Ok(result) => result.status.success(),
-        Err(_) => false,
+    let running_processes: std::collections::HashSet<String> = match output {
+        Ok(res) => String::from_utf8_lossy(&res.stdout)
+            .lines()
+            .map(|s| s.trim().to_string())
+            .collect(),
+        Err(_) => return,
+    };
+
+    let mut apps_guard = apps.lock().unwrap();
+    for (app_name, running) in apps_guard.iter_mut() {
+        let is_running = running_processes.contains(app_name);
+        if *running != is_running {
+            debug!("App '{}' running state changed: {}", app_name, is_running);
+            *running = is_running;
+        }
     }
 }
 
 /// Process tracker for monitoring running applications
+#[derive(Clone)]
 pub struct ProcessTracker {
     apps: Arc<Mutex<HashMap<String, bool>>>,
     running: Arc<Mutex<bool>>,
@@ -85,21 +96,7 @@ impl ProcessTracker {
                     }
                 }
 
-                // Update running state for all registered apps
-                let mut apps_guard = apps.lock().unwrap();
-                let app_names: Vec<String> = apps_guard.keys().cloned().collect();
-                drop(apps_guard);
-
-                for app_name in &app_names {
-                    let is_running = is_process_running(app_name);
-                    let mut apps_guard = apps.lock().unwrap();
-                    if let Some(running) = apps_guard.get_mut(app_name) {
-                        if *running != is_running {
-                            debug!("App '{}' running state changed: {}", app_name, is_running);
-                            *running = is_running;
-                        }
-                    }
-                }
+                update_all_apps(&apps);
 
                 // Check every 2 seconds
                 thread::sleep(Duration::from_secs(2));

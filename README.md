@@ -77,23 +77,18 @@ See the full [Roadmap](docs/ROADMAP.md) for details.
 - **GTK4** >= 4.10
 - **gtk4-layer-shell** >= 1.0
 
-### Quick Install (Fedora)
+### Installation
 
 ```bash
-# Install dependencies
-sudo dnf install -y gcc gtk4-devel gtk4-layer-shell-devel pkg-config git
-
-# Install Rust (if not installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-
-# Clone and build
+# Clone the repository
 git clone https://github.com/RavenRepo/blaze-dock.git
 cd blaze-dock
-cargo build --release
 
-# Run
-./target/release/blazedock
+# Run the installer for the current user
+./scripts/install.sh --user
+
+# Enable and start the service
+systemctl --user enable --now blazedock
 ```
 
 ### System-wide Installation

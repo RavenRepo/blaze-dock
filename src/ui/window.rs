@@ -8,17 +8,22 @@ use gtk4_layer_shell::{Edge, Layer, LayerShell};
 use log::{debug, info, warn};
 
 use crate::config::{DockPosition, Settings};
-use crate::services::ProcessTracker;
+use crate::services::{ProcessTracker, DBusService, WindowTracker, DriveMonitor, RecentFilesService};
 use crate::ui::{DockItem, RunningState, MagnificationController};
 use std::cell::RefCell;
 use std::rc::Rc;
+use tokio::sync::broadcast;
 
 /// Main dock window wrapper
 pub struct DockWindow {
     window: ApplicationWindow,
     dock_items: Rc<RefCell<Vec<(String, Rc<RefCell<DockItem>>)>>>,
     process_tracker: ProcessTracker,
+    window_tracker: WindowTracker,
+    drive_monitor: DriveMonitor,
+    recent_files: RecentFilesService,
     magnification: Rc<RefCell<MagnificationController>>,
+    dbus_service: Option<DBusService>,
 }
 
 impl DockWindow {
@@ -61,7 +66,11 @@ impl DockWindow {
         // Store dock items reference
         let dock_items = Rc::new(RefCell::new(Vec::new()));
 
-        // Create and add dock content
+        // Initialize D-Bus service
+        let (dbus_service, mut dbus_rx) = DBusService::new();
+        dbus_service.start();
+
+        // Create magnification controller
         let magnification = Rc::new(RefCell::new(MagnificationController::new(
             settings.hover_zoom_scale,
             2,
@@ -81,6 +90,23 @@ impl DockWindow {
         dock_content.set_size_request(width, height);
         window.set_child(Some(&dock_content));
 
+        // Connect D-Bus events to UI
+        let dock_items_dbus = Rc::clone(&dock_items);
+        gtk::glib::spawn_future_local(async move {
+            while let Ok(event) = dbus_rx.recv().await {
+                match event {
+                    crate::services::dbus_service::DBusEvent::BadgeUpdate(app_id, count, _visible) => {
+                        let items = dock_items_dbus.borrow();
+                        for (cmd, item) in items.iter() {
+                            if cmd.contains(&app_id) {
+                                item.borrow_mut().set_badge(crate::ui::BadgeType::Count(count));
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
         debug!(
             "Window created: position={:?}, size={}x{}, layer_shell={}",
             settings.position, width, height, use_layer_shell
@@ -93,9 +119,18 @@ impl DockWindow {
         }
         process_tracker.start();
 
-        // Store dock items for later updates
-        let dock_items = Rc::new(RefCell::new(Vec::new()));
-        
+        // Initialize window tracker
+        let window_tracker = WindowTracker::new();
+        window_tracker.start();
+
+        // Initialize drive monitor
+        let drive_monitor = DriveMonitor::new();
+        drive_monitor.start();
+
+        // Initialize recent files service
+        let recent_files = RecentFilesService::new();
+        recent_files.refresh();
+
         // Store dock items for later updates
         let dock_items_stored = Rc::clone(&dock_items);
         let magnification_stored = Rc::clone(&magnification);
@@ -104,7 +139,11 @@ impl DockWindow {
             window,
             dock_items: dock_items_stored,
             process_tracker,
+            window_tracker,
+            drive_monitor,
+            recent_files,
             magnification: magnification_stored,
+            dbus_service: Some(dbus_service),
         }
     }
 
@@ -149,52 +188,44 @@ impl DockWindow {
         self.window.present();
     }
 
+    /// Reload the dock with new settings
+    pub fn reload(&self, settings: &Settings) {
+        debug!("Reloading dock with new settings");
+        
+        // Remove old content
+        self.window.set_child(None::<&gtk::Widget>);
+        
+        // Clear dock items
+        self.dock_items.borrow_mut().clear();
+        
+        // Re-create content
+        let dock_content = Self::create_dock_content(settings, &self.dock_items, &self.magnification);
+        self.window.set_child(Some(&dock_content));
+        
+        // Re-setup layer shell if needed
+        if gtk4_layer_shell::is_supported() && std::env::var("BLAZEDOCK_LAYER_SHELL").is_ok() {
+            Self::setup_layer_shell(&self.window, settings);
+        }
+        
+        info!("Dock reloaded successfully");
+    }
+
     /// Show settings dialog
     pub fn show_settings(&self, settings: &Settings) {
         use crate::ui::SettingsDialog;
-        let dialog = SettingsDialog::new(&self.window, settings.clone());
+        let settings_clone = settings.clone();
+        let dialog = SettingsDialog::new(&self.window, settings_clone);
         if let Some(new_settings) = dialog.run() {
             // Save new settings
             if let Err(e) = new_settings.save() {
                 log::error!("Failed to save settings: {}", e);
             } else {
                 log::info!("Settings saved successfully");
-                // TODO: Reload dock with new settings
+                self.reload(&new_settings);
             }
         }
     }
 
-    /// Start periodic updates for running indicators
-    pub fn start_running_updates(&self) {
-        use gtk::glib;
-        use std::rc::Rc;
-        
-        let dock_items = Rc::clone(&self.dock_items);
-        
-        // Collect commands to check
-        let commands: Vec<String> = {
-            let items = dock_items.borrow();
-            items.iter().map(|(cmd, _)| cmd.clone()).collect()
-        };
-        
-        // Update running states every 2 seconds
-        glib::timeout_add_local(std::time::Duration::from_secs(2), move || {
-            let items = dock_items.borrow();
-            for (command, item) in items.iter() {
-                // Simple check: use pgrep via command
-                let is_running = Self::check_process_running(command);
-                let mut item = item.borrow_mut();
-                let state = if is_running {
-                    RunningState::Running { window_count: 1 }
-                } else {
-                    RunningState::Stopped
-                };
-                item.set_running_state(state);
-            }
-            glib::ControlFlow::Continue
-        });
-    }
-    
     /// Check if a process is running (helper function)
     fn check_process_running(command: &str) -> bool {
         use std::process::Command;
@@ -239,6 +270,52 @@ impl DockWindow {
     }
 
 
+    /// Update magnification for all dock items
+    fn update_magnification_for_all(
+        dock_items: &Rc<RefCell<Vec<(String, Rc<RefCell<DockItem>>)>>>,
+        magnification: &Rc<RefCell<MagnificationController>>,
+    ) {
+        let mag = magnification.borrow();
+        let hover_index = mag.hover_index();
+        let items = dock_items.borrow();
+        
+        for (index, (_, item)) in items.iter().enumerate() {
+            let scale = mag.calculate_scale(index, hover_index);
+            item.borrow().set_scale(scale);
+        }
+    }
+
+    /// Start periodic updates for running indicators
+    pub fn start_running_updates(&self) {
+        let dock_items = Rc::clone(&self.dock_items);
+        let process_tracker = self.process_tracker.clone();
+        let window_tracker = self.window_tracker.clone();
+        
+        gtk::glib::timeout_add_seconds_local(2, move || {
+            let dock_items_guard = dock_items.borrow();
+            for (command, item) in dock_items_guard.iter() {
+                let is_running = process_tracker.is_running(command);
+                
+                // Get actual window count if possible
+                // We extract app_id from command (simplified)
+                let app_id = command.split_whitespace().next().unwrap_or(command);
+                let window_count = window_tracker.get_window_count(app_id);
+                
+                let state = if is_running {
+                    RunningState::Running { 
+                        window_count: if window_count > 0 { window_count.min(255) as u8 } else { 1 } 
+                    }
+                } else {
+                    RunningState::Stopped
+                };
+                item.borrow_mut().set_running_state(state);
+            }
+            gtk::glib::ControlFlow::Continue
+        });
+        
+        info!("Running updates started");
+    }
+
     /// Create the dock content container with app items
     fn create_dock_content(
         settings: &Settings,
@@ -273,10 +350,36 @@ impl DockWindow {
             .css_classes(vec!["dock-container"])
             .build();
 
-        // Add dock items for each pinned app
-        for app_info in &settings.pinned_apps {
+        // Add dock items for each pinned app with magnification support
+        let magnification_ref = Rc::clone(&magnification);
+        let dock_items_ref = Rc::clone(&dock_items);
+        
+        for (index, app_info) in settings.pinned_apps.iter().enumerate() {
             let dock_item = Rc::new(RefCell::new(DockItem::new(app_info, settings)));
             let command = app_info.command.clone();
+            let item_index = index;
+            
+            let mag_enter = Rc::clone(&magnification_ref);
+            let items_enter = Rc::clone(&dock_items_ref);
+            let mag_leave = Rc::clone(&magnification_ref);
+            let items_leave = Rc::clone(&dock_items_ref);
+            
+            // Setup hover for magnification
+            let item_widget = dock_item.borrow().widget().clone();
+            let motion_controller = gtk::EventControllerMotion::new();
+            
+            motion_controller.connect_enter(move |_, _, _| {
+                mag_enter.borrow_mut().set_hover(Some(item_index));
+                Self::update_magnification_for_all(&items_enter, &mag_enter);
+            });
+            
+            motion_controller.connect_leave(move |_| {
+                mag_leave.borrow_mut().set_hover(None);
+                Self::update_magnification_for_all(&items_leave, &mag_leave);
+            });
+            
+            item_widget.add_controller(motion_controller);
+            
             dock_items.borrow_mut().push((command, Rc::clone(&dock_item)));
             dock_box.append(dock_item.borrow().widget());
         }

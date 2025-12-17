@@ -4,7 +4,7 @@
 # Copy this to ~/.config/blazedock/blazedock.toml to customize.
 
 # Dock position: "left", "right", "top", or "bottom"
-position = "left"
+position = "bottom"
 
 # Icon size in pixels
 icon_size = 48
@@ -31,7 +31,7 @@ opacity = 0.85
 border_radius = 16
 
 # Enable exclusive zone (push windows aside)
-exclusive_zone = true
+exclusive_zone = false
 
 # Enable hover zoom effect
 hover_zoom = true
@@ -39,38 +39,61 @@ hover_zoom = true
 # Hover zoom scale factor
 hover_zoom_scale = 1.15
 
-# Pinned applications
+# =============================================================================
+# Pinned Applications
+# 
+# Customize these based on your desktop environment:
+# - KDE: dolphin, konsole, systemsettings
+# - GNOME: nautilus, gnome-terminal, gnome-control-center
+# - Generic: xdg-open, x-terminal-emulator
+# =============================================================================
+
 [[pinned_apps]]
 name = "Firefox"
 icon = "firefox"
 command = "firefox"
 desktop_file = "/usr/share/applications/firefox.desktop"
 
+# --- KDE Desktop (uncomment for KDE/Plasma) ---
 [[pinned_apps]]
 name = "Files"
-icon = "org.gnome.Nautilus"
-command = "nautilus"
-desktop_file = "/usr/share/applications/org.gnome.Nautilus.desktop"
+icon = "org.kde.dolphin"
+command = "dolphin"
+desktop_file = "/usr/share/applications/org.kde.dolphin.desktop"
 
 [[pinned_apps]]
 name = "Terminal"
-icon = "org.gnome.Terminal"
-command = "gnome-terminal"
-desktop_file = "/usr/share/applications/org.gnome.Terminal.desktop"
+icon = "org.kde.konsole"
+command = "konsole"
+desktop_file = "/usr/share/applications/org.kde.konsole.desktop"
 
 [[pinned_apps]]
 name = "Settings"
-icon = "org.gnome.Settings"
-command = "gnome-control-center"
-desktop_file = "/usr/share/applications/org.gnome.Settings.desktop"
+icon = "systemsettings"
+command = "systemsettings"
+desktop_file = "/usr/share/applications/systemsettings.desktop"
 
+# --- GNOME Desktop (uncomment for GNOME) ---
+# [[pinned_apps]]
+# name = "Files"
+# icon = "org.gnome.Nautilus"
+# command = "nautilus"
+# desktop_file = "/usr/share/applications/org.gnome.Nautilus.desktop"
+
+# [[pinned_apps]]
+# name = "Terminal"
+# icon = "org.gnome.Terminal"
+# command = "gnome-terminal"
+# desktop_file = "/usr/share/applications/org.gnome.Terminal.desktop"
+
+# [[pinned_apps]]
+# name = "Settings"
+# icon = "org.gnome.Settings"
+# command = "gnome-control-center"
+# desktop_file = "/usr/share/applications/org.gnome.Settings.desktop"
+
+# --- Common Apps ---
 [[pinned_apps]]
 name = "Code"
 icon = "visual-studio-code"
 command = "code"
-
-[[pinned_apps]]
-name = "Software"
-icon = "org.gnome.Software"
-command = "gnome-software"
-

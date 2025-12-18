@@ -196,7 +196,8 @@ impl DockWindow {
         }
         
         // Setup drag and drop for .desktop file pinning
-        self_instance.setup_drag_drop();
+        // DISABLED: Causes issues with click handling
+        // self_instance.setup_drag_drop();
 
         self_instance
     }

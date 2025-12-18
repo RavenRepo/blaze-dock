@@ -107,6 +107,9 @@ pub struct Settings {
     /// Theme mode (light/dark/system)
     pub theme_mode: String,
     
+    /// Show trash icon at end of dock
+    pub show_trash: bool,
+    
     /// List of pinned applications
     pub pinned_apps: Vec<PinnedApp>,
 }
@@ -132,6 +135,7 @@ impl Default for Settings {
             show_running_apps: true,
             enable_window_previews: true,
             theme_mode: "system".to_string(),
+            show_trash: true,
             pinned_apps: Self::default_pinned_apps(),
         }
     }

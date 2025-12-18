@@ -13,7 +13,8 @@ use crate::services::{
     RunningAppsService, RunningApp, ThemeService, KeyboardService, ShortcutAction,
     MultiMonitorService, ScreencopyService,
 };
-use crate::ui::{DockItem, RunningState, MagnificationController, SearchOverlay, SearchResult};
+use crate::ui::{DockItem, RunningState, MagnificationController, SearchOverlay, SearchResult, TrashItem};
+use crate::ui::drag_drop;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -193,6 +194,9 @@ impl DockWindow {
         if settings.auto_hide {
             self_instance.setup_auto_hide(settings);
         }
+        
+        // Setup drag and drop for .desktop file pinning
+        self_instance.setup_drag_drop();
 
         self_instance
     }
@@ -276,6 +280,42 @@ impl DockWindow {
         self.keyboard_service.setup_keyboard_controller(&self.window);
         
         info!("Keyboard shortcuts enabled");
+    }
+
+    /// Setup drag and drop for reordering and pinning apps
+    fn setup_drag_drop(&self) {
+        let dock_box = self.dock_box.borrow();
+        let settings = Rc::clone(&self.settings);
+        
+        // Create shared drag state for tracking dragged item
+        let drag_state = drag_drop::create_drag_state();
+        
+        // Setup drag source on each pinned dock item
+        let items = self.dock_items.borrow();
+        for (index, (_, item, is_pinned)) in items.iter().enumerate() {
+            if *is_pinned {
+                let widget = item.borrow().widget().clone();
+                drag_drop::setup_drag_source_for_reorder(
+                    &widget,
+                    index,
+                    Rc::clone(&drag_state),
+                    Rc::clone(&settings),
+                );
+            }
+        }
+        drop(items);
+        
+        // Setup drop target on dock_box for reordering
+        drag_drop::setup_drop_target_for_reorder(
+            &dock_box,
+            Rc::clone(&drag_state),
+            Rc::clone(&settings),
+        );
+        
+        // Setup drop target for .desktop files from file managers
+        drag_drop::setup_drop_target_desktop_files(&dock_box, settings);
+        
+        info!("Drag and drop enabled - reorder, pin .desktop files, drag off to unpin");
     }
 
     /// Setup auto-hide functionality
@@ -692,6 +732,14 @@ impl DockWindow {
             // (command, item, is_pinned=true)
             dock_items.borrow_mut().push((command, Rc::clone(&dock_item), true));
             dock_box.append(dock_item.borrow().widget());
+        }
+
+        // Add trash icon at the end if enabled
+        if settings.show_trash {
+            let trash_item = TrashItem::new(settings.icon_size);
+            trash_item.setup_drop_to_delete();
+            dock_box.append(trash_item.widget());
+            debug!("Trash item added to dock");
         }
 
         main_box.append(&dock_box);

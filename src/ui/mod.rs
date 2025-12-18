@@ -14,6 +14,8 @@ mod window_preview;
 mod progress_ring;
 mod search_overlay;
 pub mod drag_drop;
+mod trash_item;
+mod expose_view;
 
 pub use window::DockWindow;
 pub use dock_item::DockItem;
@@ -25,4 +27,5 @@ pub use badge::{Badge, BadgeType, BadgePosition};
 pub use window_preview::WindowPreview;
 pub use progress_ring::ProgressRing;
 pub use search_overlay::{SearchOverlay, SearchResult};
+pub use trash_item::{TrashItem, TrashState};
 

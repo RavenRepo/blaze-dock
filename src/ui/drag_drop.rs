@@ -15,39 +15,42 @@ use std::rc::Rc;
 use crate::config::{PinnedApp, Settings};
 use crate::utils::desktop_entry::DesktopEntry;
 
-/// Drag data type for dock items
-pub const DOCK_ITEM_MIME: &str = "application/x-blazedock-item";
-
-/// Data transferred during drag operations
-#[derive(Clone, Debug)]
-pub struct DragData {
-    pub source_index: usize,
-    pub app_command: String,
+/// Shared state for tracking drag operations
+#[derive(Clone, Default)]
+pub struct DragState {
+    /// Index of currently dragged item (None if not dragging)
+    pub dragging_index: Option<usize>,
+    /// Whether drag has left the dock bounds (for unpin)
+    pub outside_dock: bool,
 }
 
-/// Setup drag source on a dock item
-pub fn setup_drag_source(
+/// Create shared drag state
+pub fn create_drag_state() -> Rc<RefCell<DragState>> {
+    Rc::new(RefCell::new(DragState::default()))
+}
+
+/// Setup drag source on a dock item for reordering
+pub fn setup_drag_source_for_reorder(
     widget: &gtk::Button,
     index: usize,
-    app_command: String,
-    on_drag_end: Rc<RefCell<Option<Box<dyn Fn(bool) + 'static>>>>,
+    drag_state: Rc<RefCell<DragState>>,
+    settings: Rc<RefCell<Settings>>,
 ) {
     let drag_source = gtk::DragSource::new();
     drag_source.set_actions(gdk::DragAction::MOVE);
     
-    let command_clone = app_command.clone();
+    let state_prepare = Rc::clone(&drag_state);
     let idx = index;
     
-    // Prepare drag data
+    // Set dragging index when drag starts
     drag_source.connect_prepare(move |_source, _x, _y| {
-        debug!("Drag prepare: index={}, command={}", idx, command_clone);
+        debug!("Drag prepare: item index={}", idx);
+        state_prepare.borrow_mut().dragging_index = Some(idx);
         
-        // Create content provider with index as string
-        let data = format!("{}:{}", idx, command_clone);
+        // Return string content with index
+        let data = idx.to_string();
         let bytes = glib::Bytes::from(data.as_bytes());
-        let content = gdk::ContentProvider::for_bytes(DOCK_ITEM_MIME, &bytes);
-        
-        Some(content)
+        Some(gdk::ContentProvider::for_bytes("text/plain", &bytes))
     });
     
     // Visual feedback during drag
@@ -59,83 +62,124 @@ pub fn setup_drag_source(
         }
     });
     
-    // Drag ended - check if dropped outside dock
+    // Handle drag end - check if dropped outside dock
     let widget_weak2 = widget.downgrade();
-    let on_end = Rc::clone(&on_drag_end);
-    drag_source.connect_drag_end(move |_source, _drag, delete| {
-        debug!("Drag ended, delete={}", delete);
+    let state_end = Rc::clone(&drag_state);
+    let settings_clone = Rc::clone(&settings);
+    let idx_for_unpin = index;
+    
+    drag_source.connect_drag_end(move |_source, _drag, delete_data| {
+        debug!("Drag ended, delete_data={}", delete_data);
+        
         if let Some(widget) = widget_weak2.upgrade() {
             widget.remove_css_class("dock-item-dragging");
         }
         
-        // Call the callback if we should delete (dropped outside)
-        if let Some(ref callback) = *on_end.borrow() {
-            callback(delete);
+        let state = state_end.borrow();
+        
+        // If drag ended outside dock and delete_data is true, unpin
+        if state.outside_dock || delete_data {
+            info!("Item {} dragged off dock - unpinning", idx_for_unpin);
+            let mut settings = settings_clone.borrow_mut();
+            if idx_for_unpin < settings.pinned_apps.len() {
+                let removed = settings.remove_pinned_app(idx_for_unpin);
+                if let Some(app) = removed {
+                    info!("Unpinned '{}' - reload dock to see changes", app.name);
+                }
+            }
         }
+        
+        // Clear drag state
+        drop(state);
+        state_end.borrow_mut().dragging_index = None;
+        state_end.borrow_mut().outside_dock = false;
+    });
+    
+    // Track when drag leaves widget bounds (for detecting drag-off-dock)
+    drag_source.connect_drag_cancel(move |_source, _drag, _reason| {
+        debug!("Drag cancelled");
+        false
     });
     
     widget.add_controller(drag_source);
 }
 
 /// Setup drop target on dock container for reordering
-pub fn setup_drop_target_reorder(
+pub fn setup_drop_target_for_reorder(
     dock_box: &gtk::Box,
+    drag_state: Rc<RefCell<DragState>>,
     settings: Rc<RefCell<Settings>>,
-    on_reorder: Rc<RefCell<Option<Box<dyn Fn(usize, usize) + 'static>>>>,
 ) {
-    let drop_target = gtk::DropTarget::new(glib::Type::INVALID, gdk::DragAction::MOVE);
-    
-    // Accept our custom MIME type
-    drop_target.set_gtypes(&[glib::Type::INVALID]);
+    let drop_target = gtk::DropTarget::new(glib::Type::STRING, gdk::DragAction::MOVE);
     
     let dock_box_weak = dock_box.downgrade();
-    let settings_clone = Rc::clone(&settings);
-    let on_reorder_clone = Rc::clone(&on_reorder);
+    let state_drop = Rc::clone(&drag_state);
+    let settings_drop = Rc::clone(&settings);
     
-    drop_target.connect_drop(move |_target, value, x, y| {
-        debug!("Drop received at ({}, {})", x, y);
-        
+    drop_target.connect_drop(move |_target, _value, x, y| {
         let dock_box = match dock_box_weak.upgrade() {
             Some(b) => b,
             None => return false,
         };
         
-        // Calculate target index based on drop position
+        let state = state_drop.borrow();
+        let source_index = match state.dragging_index {
+            Some(idx) => idx,
+            None => {
+                debug!("Drop but no source index tracked");
+                return false;
+            }
+        };
+        drop(state);
+        
+        // Calculate target index
         let target_index = calculate_drop_index(&dock_box, x, y);
         
-        // Get source index from drag data
-        // Note: GTK4's drag-drop is complex - using a simpler approach
-        info!("Drop at index: {}", target_index);
-        
-        // Trigger reorder callback
-        if let Some(ref callback) = *on_reorder_clone.borrow() {
-            // We'll use 0 as source for now - real impl needs state tracking
-            callback(0, target_index);
+        if source_index == target_index {
+            debug!("Source equals target, no reorder needed");
+            return true;
         }
+        
+        info!("Reordering: {} -> {}", source_index, target_index);
+        
+        // Reorder in settings
+        settings_drop.borrow_mut().reorder_pinned_app(source_index, target_index);
+        info!("Reorder saved - reload dock to see changes");
+        
+        // Mark drop successful (not outside dock)
+        state_drop.borrow_mut().outside_dock = false;
         
         true
     });
     
-    // Highlight during drag over
+    // Track when drag is inside dock
+    let state_enter = Rc::clone(&drag_state);
     drop_target.connect_enter(move |_target, _x, _y| {
-        debug!("Drag entered dock");
+        debug!("Drag entered dock area");
+        state_enter.borrow_mut().outside_dock = false;
         gdk::DragAction::MOVE
+    });
+    
+    // Track when drag leaves dock (for unpin)
+    let state_leave = Rc::clone(&drag_state);
+    drop_target.connect_leave(move |_target| {
+        debug!("Drag left dock area - will unpin if dropped");
+        state_leave.borrow_mut().outside_dock = true;
     });
     
     dock_box.add_controller(drop_target);
 }
 
 /// Setup drop target for .desktop files from file managers
+/// Drops are automatically saved to config - caller should reload dock to see changes
 pub fn setup_drop_target_desktop_files(
     dock_box: &gtk::Box,
     settings: Rc<RefCell<Settings>>,
-    on_add: Rc<RefCell<Option<Box<dyn Fn(PinnedApp) + 'static>>>>,
 ) {
     // Accept text/uri-list for file drops
     let drop_target = gtk::DropTarget::new(glib::Type::STRING, gdk::DragAction::COPY);
     
     let settings_clone = Rc::clone(&settings);
-    let on_add_clone = Rc::clone(&on_add);
     
     drop_target.connect_drop(move |_target, value, _x, _y| {
         debug!("File drop received");
@@ -165,21 +209,20 @@ pub fn setup_drop_target_desktop_files(
                     
                     // Parse the desktop file
                     if let Ok(entry) = DesktopEntry::parse(&path) {
+                        let name = entry.name.clone().unwrap_or_else(|| "Unknown".to_string());
+                        let icon = entry.icon.clone().unwrap_or_else(|| "application-x-executable".to_string());
+                        let command = entry.exec_command().unwrap_or_else(|| path.to_string());
+                        
                         let app = PinnedApp {
-                            name: entry.name.unwrap_or_else(|| "Unknown".to_string()),
-                            icon: entry.icon.unwrap_or_else(|| "application-x-executable".to_string()),
-                            command: entry.exec_command().unwrap_or_else(|| path.to_string()),
+                            name: name.clone(),
+                            icon,
+                            command,
                             desktop_file: Some(path.to_string()),
                         };
                         
-                        // Add to settings
-                        settings_clone.borrow_mut().add_pinned_app(app.clone());
-                        info!("App '{}' pinned to dock", app.name);
-                        
-                        // Notify UI
-                        if let Some(ref callback) = *on_add_clone.borrow() {
-                            callback(app);
-                        }
+                        // Add to settings and save
+                        settings_clone.borrow_mut().add_pinned_app(app);
+                        info!("App '{}' pinned to dock - reload to see changes", name);
                         
                         return true;
                     } else {
@@ -267,13 +310,6 @@ pub fn get_drag_drop_css() -> &'static str {
     
     .dock-container.drag-over {
         background: alpha(@accent_color, 0.2);
-    }
-    
-    .dock-item-drop-indicator {
-        background: @accent_color;
-        min-width: 3px;
-        min-height: 3px;
-        border-radius: 2px;
     }
     "#
 }

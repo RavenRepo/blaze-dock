@@ -742,7 +742,8 @@ impl DockWindow {
         // Add trash icon at the end if enabled
         if settings.show_trash {
             let trash_item = TrashItem::new(settings.icon_size);
-            trash_item.setup_drop_to_delete();
+            // DISABLED: This DropTarget causes cursor to change to +
+            // trash_item.setup_drop_to_delete();
             dock_box.append(trash_item.widget());
             debug!("Trash item added to dock");
         }

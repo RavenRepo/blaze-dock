@@ -4,21 +4,12 @@
 //! Clicking a window thumbnail focuses that window.
 
 use gtk::prelude::*;
-use gtk::{Box, Button, Image, Label, Orientation, Window as GtkWindow};
+use gtk::{Box, Button, Image, Label, Orientation};
 use gtk::glib;
-use log::{debug, info, warn};
-use std::cell::RefCell;
+use log::{debug, info};
 use std::rc::Rc;
 
-use crate::services::{WindowTracker, ScreencopyService};
-
-/// Information about a single window
-#[derive(Clone, Debug)]
-pub struct WindowInfo {
-    pub window_id: String,
-    pub title: String,
-    pub app_id: String,
-}
+use crate::services::{WindowTracker, ScreencopyService, WindowInfo};
 
 /// Exposé view showing all windows for an app
 pub struct ExposeView {
@@ -82,12 +73,12 @@ impl ExposeView {
             // Show "No windows" message
             let label = Label::new(Some("No windows open"));
             label.add_css_class("expose-empty-label");
-            self.grid.append(&label);
+            self.grid.insert(&label, -1);
         } else {
             // Add window cards
             for window_info in windows {
                 let card = self.create_window_card(&window_info);
-                self.grid.append(&card);
+                self.grid.insert(&card, -1);
             }
         }
         
@@ -122,8 +113,8 @@ impl ExposeView {
             .build();
         
         // Try to get window thumbnail
-        let window_id = window.window_id.clone();
-        let screencopy = Rc::clone(&self.screencopy);
+        let window_id = window.id.clone();
+        let _screencopy = Rc::clone(&self.screencopy);
         let app_id = self.app_id.clone();
         
         // For now, show app icon as placeholder
@@ -152,7 +143,7 @@ impl ExposeView {
         
         // Focus window on click
         let tracker = Rc::clone(&self.window_tracker);
-        let win_id = window.window_id.clone();
+        let win_id = window.id.clone();
         let popup_ref = self.popup.clone();
         
         button.connect_clicked(move |_| {
@@ -213,13 +204,9 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_window_info() {
-        let info = WindowInfo {
-            window_id: "123".to_string(),
-            title: "Test Window".to_string(),
-            app_id: "firefox".to_string(),
-        };
-        assert_eq!(info.window_id, "123");
-        assert_eq!(info.title, "Test Window");
+    fn test_expose_css() {
+        let css = get_expose_css();
+        assert!(css.contains(".expose-popup"));
+        assert!(css.contains(".expose-window-button"));
     }
 }

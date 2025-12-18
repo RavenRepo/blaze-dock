@@ -110,6 +110,9 @@ pub struct Settings {
     /// Show trash icon at end of dock
     pub show_trash: bool,
     
+    /// Show Downloads stack at end of dock
+    pub show_downloads_stack: bool,
+    
     /// List of pinned applications
     pub pinned_apps: Vec<PinnedApp>,
 }
@@ -136,6 +139,7 @@ impl Default for Settings {
             enable_window_previews: true,
             theme_mode: "system".to_string(),
             show_trash: true,
+            show_downloads_stack: true,
             pinned_apps: Self::default_pinned_apps(),
         }
     }

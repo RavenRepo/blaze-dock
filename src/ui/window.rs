@@ -13,7 +13,7 @@ use crate::services::{
     RunningAppsService, RunningApp, ThemeService, KeyboardService, ShortcutAction,
     MultiMonitorService, ScreencopyService,
 };
-use crate::ui::{DockItem, RunningState, MagnificationController, SearchOverlay, SearchResult, TrashItem};
+use crate::ui::{DockItem, RunningState, MagnificationController, SearchOverlay, SearchResult, TrashItem, StackItem};
 use crate::ui::drag_drop;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -287,35 +287,39 @@ impl DockWindow {
         let dock_box = self.dock_box.borrow();
         let settings = Rc::clone(&self.settings);
         
+        // NOTE: Drag sources for reordering are disabled for now as they
+        // interfere with normal button clicks (cursor changes to +).
+        // TODO: Fix by using gesture-based drag initiation (long press)
+        
         // Create shared drag state for tracking dragged item
-        let drag_state = drag_drop::create_drag_state();
+        // let drag_state = drag_drop::create_drag_state();
         
-        // Setup drag source on each pinned dock item
-        let items = self.dock_items.borrow();
-        for (index, (_, item, is_pinned)) in items.iter().enumerate() {
-            if *is_pinned {
-                let widget = item.borrow().widget().clone();
-                drag_drop::setup_drag_source_for_reorder(
-                    &widget,
-                    index,
-                    Rc::clone(&drag_state),
-                    Rc::clone(&settings),
-                );
-            }
-        }
-        drop(items);
+        // Setup drag source on each pinned dock item (DISABLED - causes click issues)
+        // let items = self.dock_items.borrow();
+        // for (index, (_, item, is_pinned)) in items.iter().enumerate() {
+        //     if *is_pinned {
+        //         let widget = item.borrow().widget().clone();
+        //         drag_drop::setup_drag_source_for_reorder(
+        //             &widget,
+        //             index,
+        //             Rc::clone(&drag_state),
+        //             Rc::clone(&settings),
+        //         );
+        //     }
+        // }
+        // drop(items);
         
-        // Setup drop target on dock_box for reordering
-        drag_drop::setup_drop_target_for_reorder(
-            &dock_box,
-            Rc::clone(&drag_state),
-            Rc::clone(&settings),
-        );
+        // Setup drop target on dock_box for reordering (DISABLED - needs drag sources)
+        // drag_drop::setup_drop_target_for_reorder(
+        //     &dock_box,
+        //     Rc::clone(&drag_state),
+        //     Rc::clone(&settings),
+        // );
         
-        // Setup drop target for .desktop files from file managers
+        // Setup drop target for .desktop files from file managers (WORKS)
         drag_drop::setup_drop_target_desktop_files(&dock_box, settings);
         
-        info!("Drag and drop enabled - reorder, pin .desktop files, drag off to unpin");
+        info!("Drag and drop enabled - drop .desktop files to pin apps");
     }
 
     /// Setup auto-hide functionality
@@ -740,6 +744,13 @@ impl DockWindow {
             trash_item.setup_drop_to_delete();
             dock_box.append(trash_item.widget());
             debug!("Trash item added to dock");
+        }
+
+        // Add Downloads stack if enabled
+        if settings.show_downloads_stack {
+            let stack_item = StackItem::downloads(settings.icon_size);
+            dock_box.append(stack_item.widget());
+            debug!("Downloads stack added to dock");
         }
 
         main_box.append(&dock_box);

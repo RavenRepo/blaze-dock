@@ -608,6 +608,99 @@ impl WindowTracker {
         *running = false;
         info!("Window tracker stopped");
     }
+
+    /// Focus a specific window by ID
+    pub fn focus_window(&self, window_id: &str) {
+        let desktop = self.get_desktop_environment();
+        let win_id = window_id.to_string();
+        
+        match desktop {
+            DesktopEnvironment::KDE => {
+                glib::spawn_future_local(async move {
+                    if let Err(e) = Self::focus_window_kde(&win_id).await {
+                        warn!("Failed to focus KDE window: {}", e);
+                    }
+                });
+            }
+            DesktopEnvironment::GNOME => {
+                glib::spawn_future_local(async move {
+                    if let Err(e) = Self::focus_window_gnome(&win_id).await {
+                        warn!("Failed to focus GNOME window: {}", e);
+                    }
+                });
+            }
+            DesktopEnvironment::Hyprland => {
+                Self::focus_window_hyprland(&win_id);
+            }
+            DesktopEnvironment::Sway => {
+                Self::focus_window_sway(&win_id);
+            }
+            _ => {
+                warn!("Window focus not supported for unknown desktop");
+            }
+        }
+    }
+
+    /// Focus window on KDE via D-Bus
+    async fn focus_window_kde(window_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let connection = zbus::Connection::session().await?;
+        
+        // Try to activate window via KWin
+        connection.call_method(
+            Some("org.kde.KWin"),
+            "/KWin",
+            Some("org.kde.KWin"),
+            "activateWindow",
+            &(window_id,),
+        ).await?;
+        
+        info!("Focused KDE window: {}", window_id);
+        Ok(())
+    }
+
+    /// Focus window on GNOME via D-Bus
+    async fn focus_window_gnome(window_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let connection = zbus::Connection::session().await?;
+        
+        // Use Shell.Eval to focus the window
+        let script = format!(
+            "global.get_window_actors().find(a => a.meta_window.get_id().toString() === '{}')?.meta_window.activate(global.get_current_time())",
+            window_id
+        );
+        
+        connection.call_method(
+            Some("org.gnome.Shell"),
+            "/org/gnome/Shell",
+            Some("org.gnome.Shell"),
+            "Eval",
+            &(script,),
+        ).await?;
+        
+        info!("Focused GNOME window: {}", window_id);
+        Ok(())
+    }
+
+    /// Focus window on Hyprland via CLI
+    fn focus_window_hyprland(window_id: &str) {
+        match std::process::Command::new("hyprctl")
+            .args(["dispatch", "focuswindow", &format!("address:{}", window_id)])
+            .spawn()
+        {
+            Ok(_) => info!("Focused Hyprland window: {}", window_id),
+            Err(e) => warn!("Failed to focus Hyprland window: {}", e),
+        }
+    }
+
+    /// Focus window on Sway via CLI
+    fn focus_window_sway(window_id: &str) {
+        match std::process::Command::new("swaymsg")
+            .args(["[con_id=", window_id, "]", "focus"])
+            .spawn()
+        {
+            Ok(_) => info!("Focused Sway window: {}", window_id),
+            Err(e) => warn!("Failed to focus Sway window: {}", e),
+        }
+    }
 }
 
 impl Default for WindowTracker {

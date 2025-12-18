@@ -56,11 +56,11 @@ BlazeDock is a modern, native Wayland dock built with **Rust** and **GTK4**. Des
 - 🖥️ **Wayland Native** - Full Layer Shell support (Sway/Hyprland) + floating fallback (KDE/GNOME)
 - ⚙️ **TOML Configuration** - Easy customization with live reload
 - 🔄 **Auto-start** - Systemd user service and desktop entry
-- 🔍 **Window Previews** - Thumbnail previews on hover (UI ready, screencopy service)
+- 🔍 **Window Previews** - Preview UI on hover (shows app icon fallback*)
 - 📊 **Progress Rings** - Cairo-drawn circular progress indicators
 - 🔔 **Notification Badges** - Count, progress, attention, and custom badges
 - 🎯 **Magnification** - macOS-style cosine-based zoom effect
-- ⌨️ **Keyboard Shortcuts** - Super+1-9 to launch apps, arrow navigation, type-to-search
+- ⌨️ **Keyboard Shortcuts** - Arrow navigation, type-to-search (Super+1-9 when dock focused*)
 - 🖱️ **Window Dragging** - Drag floating dock to reposition
 - 🎨 **Theme Integration** - Auto-detect KDE/GNOME accent colors
 - 🖥️ **Multi-Monitor** - Primary, All, Follow, and Per-Monitor modes
@@ -195,7 +195,7 @@ BLAZEDOCK_CONFIG=/path/to/config.toml blazedock
 
 ## Roadmap
 
-BlazeDock has achieved **100% feature completion** for the planned roadmap! See [docs/ROADMAP.md](docs/ROADMAP.md) for the full development plan and [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) for detailed status.
+BlazeDock has a solid foundation with most UI features complete. Some advanced system integration features are pending Wayland protocol implementation. See [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) for detailed status.
 
 ### Phase Overview
 
@@ -203,10 +203,19 @@ BlazeDock has achieved **100% feature completion** for the planned roadmap! See 
 |-------|--------|-------|
 | 1. Core Foundation | ✅ Complete | Basic dock, config, launching |
 | 2. Visual Excellence | ✅ Complete | Animations, theming, badges, progress rings |
-| 3. Window Integration | ✅ Complete | Previews, running apps, window tracking |
-| 4. System Integration | ✅ Complete | D-Bus API, notifications, theme detection |
+| 3. Window Integration | ⚠️ Partial | UI ready, window tracking placeholder |
+| 4. System Integration | ⚠️ Partial | Theme detection works, D-Bus placeholder |
 | 5. Intelligence | ✅ Complete | Auto-hide, edge detection, context awareness |
-| 6. Power User | ✅ Complete | Keyboard shortcuts, profiles, multi-monitor |
+| 6. Power User | ✅ Complete | Profiles, multi-monitor (global shortcuts pending) |
+
+### Known Limitations
+
+> **Note**: These features have UI components but pending backend implementation:
+
+- **Window Tracking**: Uses process scanning; Wayland foreign-toplevel protocol not yet implemented
+- **Window Previews**: Shows app icon fallback; live screencopy capture pending
+- **Global Shortcuts**: Super+1-9 only works when dock has keyboard focus
+- **D-Bus Badges**: Unity LauncherEntry badge support not yet implemented
 
 ## Contributing
 

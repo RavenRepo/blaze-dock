@@ -87,7 +87,7 @@ impl DockWindow {
         let separator: Rc<RefCell<Option<Separator>>> = Rc::new(RefCell::new(None));
 
         // Initialize D-Bus service
-        let (dbus_service, dbus_rx) = DBusService::new();
+        let dbus_service = DBusService::new();
         dbus_service.start();
 
         // Create magnification controller
@@ -113,9 +113,7 @@ impl DockWindow {
         dock_content.set_size_request(width, height);
         window.set_child(Some(&dock_content));
 
-        // D-Bus event handling is currently in placeholder mode
-        // TODO: Implement proper D-Bus event loop when async runtime is set up
-        let _ = dbus_rx; // Acknowledge the receiver (unused for now)
+        // D-Bus event handling uses callbacks now (see DBusService::on_badge_update)
 
         debug!(
             "Window created: position={:?}, size={}x{}, layer_shell={}",

@@ -13,6 +13,7 @@ mod badge;
 mod window_preview;
 mod progress_ring;
 mod search_overlay;
+pub mod drag_drop;
 
 pub use window::DockWindow;
 pub use dock_item::DockItem;

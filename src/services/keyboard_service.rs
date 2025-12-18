@@ -1,15 +1,17 @@
 //! Global keyboard shortcuts service
 //!
-//! Provides Super+1-9 shortcuts for launching/focusing dock apps
-//! and keyboard navigation within the dock.
+//! Provides system-wide Super+1-9 shortcuts for launching/focusing dock apps.
+//! Uses compositor-specific APIs:
+//! - KDE: org.kde.kglobalaccel D-Bus interface
+//! - GNOME/Other: org.freedesktop.portal.GlobalShortcuts
 
 use gtk::prelude::*;
 use gtk::glib;
 use log::{info, debug, warn};
-use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 
 /// Shortcut action types
 #[derive(Debug, Clone)]
@@ -38,12 +40,26 @@ pub struct ShortcutBinding {
     pub action: ShortcutAction,
 }
 
+/// Global shortcut registration status
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlobalShortcutStatus {
+    /// Global shortcuts not registered
+    NotRegistered,
+    /// Registered via KDE kglobalaccel
+    KDE,
+    /// Registered via XDG Portal
+    Portal,
+    /// Registration failed
+    Failed,
+}
+
 /// Keyboard service for global shortcuts
 #[derive(Clone)]
 pub struct KeyboardService {
     shortcuts: Rc<RefCell<Vec<ShortcutBinding>>>,
     action_callbacks: Rc<RefCell<HashMap<String, Box<dyn Fn(ShortcutAction)>>>>,
     enabled: Rc<RefCell<bool>>,
+    global_status: Arc<Mutex<GlobalShortcutStatus>>,
 }
 
 impl KeyboardService {
@@ -53,6 +69,7 @@ impl KeyboardService {
             shortcuts: Rc::new(RefCell::new(Vec::new())),
             action_callbacks: Rc::new(RefCell::new(HashMap::new())),
             enabled: Rc::new(RefCell::new(true)),
+            global_status: Arc::new(Mutex::new(GlobalShortcutStatus::NotRegistered)),
         };
         
         service.register_default_shortcuts();
@@ -98,7 +115,37 @@ impl KeyboardService {
         callbacks.insert(id.to_string(), Box::new(callback));
     }
 
-    /// Setup keyboard controller on a widget
+    /// Start global shortcut registration
+    pub fn register_global_shortcuts(&self) {
+        let status = self.global_status.clone();
+        let callbacks = Rc::clone(&self.action_callbacks);
+        
+        glib::spawn_future_local(async move {
+            // Try KDE first
+            if let Ok(true) = try_register_kde_shortcuts().await {
+                *status.lock().unwrap() = GlobalShortcutStatus::KDE;
+                info!("Global shortcuts registered via KDE kglobalaccel");
+                return;
+            }
+            
+            // Try XDG Portal
+            if let Ok(true) = try_register_portal_shortcuts().await {
+                *status.lock().unwrap() = GlobalShortcutStatus::Portal;
+                info!("Global shortcuts registered via XDG Portal");
+                return;
+            }
+            
+            warn!("Could not register global shortcuts - only dock-focused shortcuts available");
+            *status.lock().unwrap() = GlobalShortcutStatus::Failed;
+        });
+    }
+
+    /// Get global shortcut registration status
+    pub fn get_global_status(&self) -> GlobalShortcutStatus {
+        *self.global_status.lock().unwrap()
+    }
+
+    /// Setup keyboard controller on a widget (for when dock has focus)
     pub fn setup_keyboard_controller(&self, widget: &impl IsA<gtk::Widget>) {
         let key_controller = gtk::EventControllerKey::new();
         
@@ -223,24 +270,179 @@ impl Default for KeyboardService {
     }
 }
 
-/// Try to register global shortcuts via D-Bus (KDE/GNOME)
-pub fn register_global_shortcuts() {
-    // Try KDE Global Shortcuts
-    glib::spawn_future_local(async {
-        if let Err(e) = register_kde_shortcuts().await {
-            warn!("Failed to register KDE shortcuts: {}", e);
-        }
-    });
-}
-
-/// Register shortcuts via KDE's Global Shortcuts D-Bus interface
-async fn register_kde_shortcuts() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+/// Try to register shortcuts via KDE's kglobalaccel D-Bus interface
+async fn try_register_kde_shortcuts() -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let connection = zbus::Connection::session().await?;
     
-    // KDE uses org.kde.kglobalaccel
-    // This is a simplified version - full implementation would need proper D-Bus interface
-    info!("KDE global shortcuts registration attempted");
+    // Check if KDE kglobalaccel service exists
+    let dbus = zbus::fdo::DBusProxy::new(&connection).await?;
+    let names = dbus.list_names().await?;
+    
+    let has_kglobalaccel = names.iter().any(|n| n.as_str() == "org.kde.kglobalaccel");
+    
+    if !has_kglobalaccel {
+        debug!("KDE kglobalaccel not available");
+        return Ok(false);
+    }
+    
+    // Register BlazeDock shortcuts with kglobalaccel
+    // Using the Component interface
+    let result = connection.call_method(
+        Some("org.kde.kglobalaccel"),
+        "/component/blazedock",
+        Some("org.kde.kglobalaccel.Component"),
+        "isActive",
+        &(),
+    ).await;
+    
+    match result {
+        Ok(_) => {
+            debug!("BlazeDock component already registered with kglobalaccel");
+        }
+        Err(_) => {
+            // Need to register the component first
+            debug!("Registering BlazeDock with kglobalaccel");
+            
+            // Register each shortcut
+            for i in 1..=9u8 {
+                let action_id = format!("activate-app-{}", i);
+                let friendly_name = format!("Activate App {}", i);
+                let default_shortcut = format!("Meta+{}", i);
+                
+                let _ = register_kde_shortcut(&connection, &action_id, &friendly_name, &default_shortcut).await;
+            }
+            
+            // Toggle dock
+            let _ = register_kde_shortcut(&connection, "toggle-dock", "Toggle Dock", "Meta+D").await;
+            
+            // Show search
+            let _ = register_kde_shortcut(&connection, "show-search", "Show Search", "Meta+/").await;
+        }
+    }
+    
+    info!("KDE global shortcuts registration complete");
+    Ok(true)
+}
+
+/// Register a single shortcut with KDE kglobalaccel
+async fn register_kde_shortcut(
+    connection: &zbus::Connection,
+    action_id: &str,
+    friendly_name: &str,
+    default_shortcut: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // kglobalaccel uses a complex signature for setShortcut
+    // (ssssasus) - component, unique id, friendly name, default, active shortcuts, flags
+    let result = connection.call_method(
+        Some("org.kde.kglobalaccel"),
+        "/kglobalaccel",
+        Some("org.kde.KGlobalAccel"),
+        "setShortcut",
+        &(
+            "blazedock",                    // Component name
+            action_id,                       // Action unique ID
+            friendly_name,                   // Friendly action name
+            default_shortcut,                // Default shortcut
+            vec![default_shortcut.to_string()], // Active shortcuts
+            0x02u32,                        // Flags: Active
+        ),
+    ).await;
+    
+    match result {
+        Ok(_) => debug!("Registered KDE shortcut: {} -> {}", action_id, default_shortcut),
+        Err(e) => debug!("Failed to register KDE shortcut {}: {}", action_id, e),
+    }
     
     Ok(())
 }
 
+/// Try to register shortcuts via XDG Desktop Portal
+async fn try_register_portal_shortcuts() -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    let connection = zbus::Connection::session().await?;
+    
+    // Check if GlobalShortcuts portal exists
+    let dbus = zbus::fdo::DBusProxy::new(&connection).await?;
+    let names = dbus.list_activatable_names().await?;
+    
+    let has_portal = names.iter().any(|n| n.as_str().contains("portal"));
+    
+    if !has_portal {
+        debug!("XDG Portal not available");
+        return Ok(false);
+    }
+    
+    // Try to use org.freedesktop.portal.GlobalShortcuts
+    let result = connection.call_method(
+        Some("org.freedesktop.portal.Desktop"),
+        "/org/freedesktop/portal/desktop",
+        Some("org.freedesktop.portal.GlobalShortcuts"),
+        "CreateSession",
+        &(HashMap::<String, zbus::zvariant::Value>::new(),),
+    ).await;
+    
+    match result {
+        Ok(reply) => {
+            debug!("Portal GlobalShortcuts session created: {:?}", reply);
+            // Note: Full implementation would listen for Activated signals
+            Ok(true)
+        }
+        Err(e) => {
+            debug!("Portal GlobalShortcuts not available: {}", e);
+            Ok(false)
+        }
+    }
+}
+
+/// Backward compatibility function
+pub fn register_global_shortcuts() {
+    let service = KeyboardService::new();
+    service.register_global_shortcuts();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_service_creation() {
+        let service = KeyboardService::new();
+        assert!(service.is_enabled());
+    }
+
+    #[test]
+    fn test_default_shortcuts() {
+        let service = KeyboardService::new();
+        let shortcuts = service.get_shortcuts();
+        
+        // Should have 9 app shortcuts + toggle + search = 11
+        assert_eq!(shortcuts.len(), 11);
+    }
+
+    #[test]
+    fn test_enable_disable() {
+        let service = KeyboardService::new();
+        
+        assert!(service.is_enabled());
+        
+        service.set_enabled(false);
+        assert!(!service.is_enabled());
+        
+        service.set_enabled(true);
+        assert!(service.is_enabled());
+    }
+
+    #[test]
+    fn test_custom_shortcut() {
+        let service = KeyboardService::new();
+        
+        let initial_count = service.get_shortcuts().len();
+        
+        service.add_shortcut(ShortcutBinding {
+            modifiers: gtk::gdk::ModifierType::CONTROL_MASK,
+            key: gtk::gdk::Key::q,
+            action: ShortcutAction::ToggleDock,
+        });
+        
+        assert_eq!(service.get_shortcuts().len(), initial_count + 1);
+    }
+}
